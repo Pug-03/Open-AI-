@@ -15,7 +15,12 @@ review/
 # Local secrets and env overrides (only .env.example / .env.development / .env.production are committed)
 .env.*.local
 .dev.vars
+.dev.vars.*
+!.dev.vars.example
 *.pem
+
+# Local Agentic eval artifacts
+live-report*.json
 
 # Scratch / QA scripts and outputs
 .*.tmp.mjs

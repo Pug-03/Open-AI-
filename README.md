@@ -25,6 +25,9 @@ packages/core   routing / shadow / scoring + adapter interfaces — runs in Node
 packages/data   Zod schemas (mirror future PostGIS tables) + dataset loaders
 config/cities   per-city settings (time zone, bounds, emergency numbers, data sources)
 apps/ai-proxy   Cloudflare Worker for optional ElevenLabs speech (see AI_USAGE.md)
+packages/walkwe-agentic   Agentic workflow, routing fixture, local Worker and eval
+packages/verify          Deterministic evidence and route checks
+packages/voice-research  Asynchronous street evidence research and review queue
 ```
 
 Adapters (`packages/core/src/adapters`): `GeocoderAdapter` (Photon today),
@@ -47,6 +50,19 @@ npm run preview      # http://localhost:4175
 npm run lighthouse   # mobile Lighthouse on every screen; fails below 90 (needs CHROME_PATH)
 npm run photos       # rebuild route photo variants after dropping in real photos
 ```
+
+## Agentic workflows
+
+The Agentic packages run independently as a local preview and evaluation suite.
+
+```bash
+npm run test:agentic
+npm run eval:agentic
+npm run agentic:dev   # http://127.0.0.1:4178
+```
+
+See the [Agentic architecture and env setup](docs/agentic/ARCHITECTURE.md) and
+the [OpenAI live eval report](docs/agentic/EVAL_2026-11-21.md).
 
 ## Optional hosted speech
 
