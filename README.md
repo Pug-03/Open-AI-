@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="apps/web2/public/icon.svg" alt="Walk We logo" width="96" height="96">
+
 # Walk We 2
 
 **Shadier walks by day. Safer walks by night. Plan a route around Siam that follows the sun and the data.**
@@ -9,6 +11,7 @@ Mobile-first PWA for central Bangkok. No account, works offline, and the routing
 [Live demo](https://walkwe-web2.walkwe.workers.dev) ·
 [What it does](#what-it-does) ·
 [How it works](#how-it-works) ·
+[Agentic AI Workflow](#agentic-ai-workflow) ·
 [Tech stack](#tech-stack) ·
 [Quick start](#quick-start) ·
 [Testing](#testing-and-quality) ·
@@ -93,6 +96,66 @@ Dependencies point one way: `apps/web2 → packages/data → packages/core → c
 | `LiveShareService` | interface only | Supabase Realtime with expiring links |
 
 More detail, including how to scale to the whole city and add another city, is in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+---
+
+## Agentic AI Workflow
+
+### Plan and verify a walk
+
+1. **Capture and confirm intent.** A typed or spoken Thai or English request becomes an editable draft with start, destination, Bangkok departure time, day or night mode, and stair preference. Optional GPT‑6.1 Terra extraction is scoped to the public place catalogue. The local parser and form handle unavailable models and fields that need clarification. The walker confirms the endpoints before calculating routes.
+2. **Calculate routes and gather evidence.** Web2 computes map routes with `AreaRouter` in a Web Worker, including trips from a private pin or GPS. Review of a confirmed public-landmark trip runs independently in the proxy against the versioned Siam graph. It builds a snapshot with candidate IDs, ETA, distance, daytime shade and nighttime lit, dark and unknown distances. The comparison applies the same stair restriction and passage hours to each route. Evidence records identify the segment, source or method, observation date and dataset version. The Agentic review treats lamp proximity as an estimate and excludes stale or future-dated lighting from trusted evidence.
+3. **Compare time or lighting assumptions.** The daytime Departure Advisor compares sun exposure at five-minute intervals, up to 30 minutes later, while checking passage hours and any arrival deadline supplied to the workflow. At night the stress test compares treating unknown stretches as lit versus dark. Web2 asks once when the recommendation changes or the suggested route contains unmapped lighting. Answering reruns the review for the same trip and keeps the observed lighting and selected map route intact.
+4. **Orchestrate, verify and retry.** The proxy and `createWorkflows()` prepare the trip context and pass the snapshot to Planner (GPT‑6.1 Terra). The harness validates calls such as `get_trip_snapshot`, `get_segment_evidence` and `finish_trip`, tracks which evidence the model read, and checks the draft's route IDs, claims, unknowns and numeric placeholders. Code fills the placeholders from checked metrics. Critic (GPT‑6.1 Sol) checks claims against the same evidence when the lighting stress test changes the winner or another candidate is within two minutes. Rejected drafts can return to Planner within six Planner steps, eight tool calls, two rejected finishes and a shared 20-second deadline.
+5. **Return a review with its source.** The proxy serves a JSON result or streams NDJSON progress for routing, evidence and verification, including Critic when invoked. The result identifies its source as `verified_planner` or `worker`, and Web2 explains that source alongside the metrics. Provider errors, verification failures and exhausted budgets fall back to deterministic route text. Segment highlights remain available from the routing data, and the optional ranking endpoint can reorder the supplied highlights. The walker chooses the route used for navigation.
+
+The routing decision is `ACT` when the comparison produces a stable recommendation, `VERIFY` when the night recommendation changes with the lighting assumption, or `ABSTAIN` when the review cannot produce an eligible route. The app can ask about unmapped lighting even when both assumptions produce the same recommendation. Recommendations describe conditions based on available data.
+
+### Context, retrieval and memory
+
+| Layer | What it handles |
+| --- | --- |
+| **Context Engineering** | Builds bounded input from confirmed public IDs, Bangkok departure, language, walking constraints and a single dataset snapshot. User text, public excerpts and tool results enter as data. The Intent context masks supported patterns for links, contact details and coordinates before model extraction. |
+| **Evidence retrieval** | Route tools read metrics and segment provenance from the current graph snapshot. Segment Research uses public web sources for a separate review queue. |
+| **CAG (Cache-Augmented Generation)** | The Responses client records provider prompt-cache usage. A dedicated CAG prefix for stable routing guidance is a follow-up. Route evidence comes from the graph snapshot for each trip. |
+| **Trip memory** | Navigation restores the active trip from device storage. The standalone Worker uses an expiring continuation for a single trip. Long-term Memory-Augmented Generation (MAG) is outside the current runtime. |
+
+[Context, retrieval and caching](docs/agentic/ARCHITECTURE.md#context-retrieval-and-caching)
+
+### Voice Agent, navigation and SOS
+
+- **Live conversation.** The walker starts an opt-in WebRTC session with `gpt-live-1.1`, which delegates to `gpt-6.1-terra`. Web2 validates actions against the current screen and state. The same session can draft a trip, find routes after confirmation, review evidence, answer the lighting question and select an offered route. On later screens the walker can ask about the active trip, hear a navigation step, open share or SOS controls, or answer the arrival lighting question. The app stores the arrival answer on-device.
+- **Checked speech.** For route and navigation playback, the app supplies the checked text and figures to `gpt-realtime-2.1-mini`. The proxy releases audio after its transcript matches the requested wording. Device speech covers unavailable or mismatched audio. Browser dictation stays available independently of hosted speech. The Live microphone pauses during action handling and playback, and the session has a two-minute limit.
+- **Trip Companion.** Closure, nightfall or missing lighting can prompt a warning or replan offer during navigation. The proxy also accepts a rain event from a trusted integration. The workflow tracks handled events and shows at most two notices per walk. The walker confirms a route change.
+- **SOS and sharing.** Voice opens the existing controls. The app lets the walker share manually, rehearse the SOS flow, or confirm delivery through the optional authenticated relay after a cancellable countdown. The relay checks the confirmed recipient, deduplicates sends, and tracks provider acceptance and recipient acknowledgement independently. Practice runs use the simulator.
+
+### Evidence collection and human approval
+
+| Workflow | Intake and result |
+| --- | --- |
+| **Evidence Steward** | Corroborated night-lighting observations from distinct authenticated reporters and consented, scrubbed photo labels enter the evidence queue as drafts. |
+| **News Scout** | A trusted submitter provides a public excerpt, source URL and permitted segment IDs. Structured extraction proposes the incident type, dates and segment match for review. |
+| **Public Segment Research** | The night route evidence panel submits a selected public edge and graph version. GPT‑6 Astra looks up public sources in an asynchronous job. A browser capability scopes polling, and the draft enters `pending_review` for a reviewer. |
+| **Human review** | An authorized reviewer approves or rejects the current draft revision. The queue records the decision and an audit trail. Fresh approved lighting can fill an unknown edge on the matching graph version. News, photo labels and web research remain attributed review records. |
+
+[Evidence review and research API](packages/voice-research/README.md)
+
+### Runtime and integration points
+
+| Surface | Contract |
+| --- | --- |
+| **Web2 and Cloudflare proxy** | `/agentic/intent`, `/agentic/plan` and `/agentic/companion` handle app requests. `/route-evidence` ranks existing highlights. `/voice/live` opens the session and `/voice/live/speak` returns checked audio. `/sos` handles the relay. Hosted model calls depend on Worker secrets, the configured origin and rate limits. |
+| **Evidence and SOS storage** | `/evidence/*` and `/agents/research` use authenticated service identities. The proxy config declares SQLite-backed `EVIDENCE_QUEUE` and `SOS_OUTBOX` Durable Objects. |
+| **Node preview and standalone Worker** | The local preview serves `/api/*` with either fixtures or the public Web2 graph. The authenticated `/agent/step` contract uses an expiring continuation for one tool call at a time. The host checks any proposed finish before displaying it. |
+| **Read-only MCP** | `get_segment_evidence`, `replay_demo_trip` and `compare_departure_times` use the named fixture or Web2 dataset version over stdio. The tools support inspection and replay in Codex or Claude. |
+
+The [Agentic package](packages/walkwe-agentic/README.md) documents the local tools and model-free fallback. The [workflow architecture](docs/agentic/ARCHITECTURE.md) covers the host contract and service settings. The [Dot handoff](packages/walkwe-agentic/DOT.md) records the team assistant's role in tracking acceptance and blockers.
+
+### Verification and rollout
+
+The local suites exercise routing and evidence, successful and rejected Planner drafts, the Critic retry path, provider fallbacks, voice tool validation, evidence approval and simulated SOS. The offline eval covers 34 fixture cases and 18 mocked-provider cases. The recorded live eval from the earlier sandbox commit passed 10 of 12 cases. All ten Intent cases passed, and both Planner cases used the deterministic fallback after hitting the deadline before Critic ran. [Recorded OpenAI eval](docs/agentic/EVAL_2026-11-21_RERUN.md)
+
+Staging verification covers a real Thai microphone session through the lighting answer and checked playback, deployed evidence approval and confirmed SOS delivery to an enrolled recipient. [Deployment and integration status](docs/agentic/ARCHITECTURE.md#deployment-and-integration-status)
 
 ---
 
