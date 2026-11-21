@@ -136,7 +136,7 @@ async function reviewDraft({ model, final, focus, seenEvidence, request, signal,
 
 export async function runPlannerHarness({
   model, result, facts, evidence, places = [], rankUnknowns, suggestDeparture,
-  signal: parentSignal, deadlineMs = loopLimits.deadlineMs,
+  signal: parentSignal, deadlineMs = loopLimits.deadlineMs, onProgress,
 }) {
   const timeout = AbortSignal.timeout(Math.min(deadlineMs, loopLimits.deadlineMs));
   const signal = parentSignal ? AbortSignal.any([parentSignal, timeout]) : timeout;
@@ -175,10 +175,18 @@ export async function runPlannerHarness({
   const criticNeeded = result.stress.flipped || result.routes.some(route => route.id !== result.recommendedId
     && Math.abs(route.minutes - routeSet.get(result.recommendedId).minutes) <= agentConfig.closeCallMinutes);
   const checkWithCritic = async (draft, focus, preloaded) => {
+    signal.throwIfAborted();
     loop.criticCalls += 1;
-    const report = await reviewDraft({ model, final: draft, focus, seenEvidence, request, signal, envelope, preloaded });
-    trace.push({ step: "critic", passed: report.verdict === "accept" });
-    return report;
+    onProgress?.({ stage: "critique", state: "working" });
+    let accepted = false;
+    try {
+      const report = await reviewDraft({ model, final: draft, focus, seenEvidence, request, signal, envelope, preloaded });
+      accepted = report.verdict === "accept";
+      trace.push({ step: "critic", passed: accepted });
+      return report;
+    } finally {
+      onProgress?.({ stage: "critique", state: accepted ? "done" : "fallback" });
+    }
   };
   const remember = record => { seenEvidence.set(record.evidence_id, record); };
   const routeArgs = args => args.route_ids.every(id => routeSet.has(id));

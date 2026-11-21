@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { handleAgenticCompanion, handleAgenticIntent, handleAgenticPlan } from '../src/agentic-plan';
+import proxy from '../src/index';
 
 const area = readFileSync(new URL('../../../data/areas/siam.json', import.meta.url), 'utf8');
 const incidents = readFileSync(new URL('../../../data/incidents/bangkok.json', import.meta.url), 'utf8');
@@ -10,6 +11,12 @@ const trip = {
   from: 'bts:CEN', to: 'osm:W356193680', date: '2026-11-21', time: '12:00',
   mode: 'day', language: 'en', noStairs: false,
 };
+const origin = 'https://walkwe-test.example';
+const requestPlan = (body: unknown, accept = 'application/json') =>
+  new Request('https://proxy-test.example/agentic/plan', {
+    method: 'POST', body: JSON.stringify(body),
+    headers: { origin, accept, 'content-type': 'application/json', 'sec-fetch-mode': 'cors', 'sec-fetch-site': 'cross-site' },
+  });
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -59,13 +66,84 @@ it('applies Planner and Critic to the canonical public graph and keeps private l
   });
   expect(models).toEqual([]);
 
-  const plan = await handleAgenticPlan(trip, { ...env, RATE_LIMITER: limiter, GLOBAL_LIMITER: limiter }, signal);
-  expect(plan.body).toMatchObject({
+  const plan = await proxy.fetch(requestPlan(trip, 'application/x-ndjson'), {
+    ...env, ALLOWED_ORIGINS: origin, OPENAI_AGENTIC_ORIGIN: origin,
+    RATE_LIMITER: limiter, GLOBAL_LIMITER: limiter, AGENTIC_MODEL_LIMITER: limiter,
+  });
+  expect(plan.status).toBe(200);
+  expect(plan.headers.get('content-type')).toContain('application/x-ndjson');
+  expect(plan.headers.get('cache-control')).toBe('no-store');
+  expect(plan.headers.get('access-control-allow-origin')).toBe(origin);
+  const records = (await plan.text()).trim().split('\n').map(line => JSON.parse(line));
+  const result = records.pop();
+  expect(records).toEqual([
+    { type: 'progress', stage: 'routes', state: 'working' },
+    { type: 'progress', stage: 'routes', state: 'done' },
+    { type: 'progress', stage: 'evidence', state: 'working' },
+    { type: 'progress', stage: 'evidence', state: 'done' },
+    { type: 'progress', stage: 'review', state: 'working' },
+    { type: 'progress', stage: 'critique', state: 'working' },
+    { type: 'progress', stage: 'critique', state: 'done' },
+    { type: 'progress', stage: 'review', state: 'done' },
+  ]);
+  expect(result.type).toBe('result');
+  expect(result.result).toMatchObject({
     status: 'ok', source: 'verified_planner',
     trace: expect.arrayContaining([expect.objectContaining({ step: 'critic', passed: true })]),
     text: expect.stringMatching(/Estimated sun exposure:/),
   });
   expect(models).toEqual(['gpt-6.1-terra', 'gpt-6.1-terra', 'gpt-6.1-sol']);
+});
+
+it('keeps legacy JSON and skips model activity in the streamed deterministic plan', async () => {
+  vi.stubGlobal('fetch', async (input: string | URL) => {
+    const url = new URL(input);
+    expect(url.origin).toBe('https://fallback-stream.example');
+    return new Response(url.pathname.includes('/areas/') ? area : incidents, { headers: { 'content-type': 'application/json' } });
+  });
+  const env = { ALLOWED_ORIGINS: origin, WALKWE_DATA_ORIGIN: 'https://fallback-stream.example' };
+  const json = await proxy.fetch(requestPlan(trip), env);
+  expect(json.status).toBe(200);
+  expect(json.headers.get('content-type')).toBe('application/json');
+  const plan = await json.json();
+  expect(plan).toMatchObject({ status: 'ok', source: 'worker' });
+  const stream = await proxy.fetch(requestPlan(trip, 'application/x-ndjson'), env);
+  expect((await stream.text()).trim().split('\n').map(line => JSON.parse(line))).toEqual([
+    { type: 'progress', stage: 'routes', state: 'working' },
+    { type: 'progress', stage: 'routes', state: 'done' },
+    { type: 'progress', stage: 'evidence', state: 'working' },
+    { type: 'progress', stage: 'evidence', state: 'done' },
+    { type: 'progress', stage: 'review', state: 'fallback' },
+    { type: 'result', result: plan },
+  ]);
+});
+
+it('stops an active planner when the client cancels the event stream', async () => {
+  let signalFromModel: AbortSignal | undefined;
+  const dataOrigin = 'https://cancel-stream.example';
+  vi.stubGlobal('fetch', (input: string | URL, init?: RequestInit) => {
+    const url = new URL(input);
+    if (url.origin === dataOrigin) {
+      return Promise.resolve(new Response(url.pathname.includes('/areas/') ? area : incidents, {
+        headers: { 'content-type': 'application/json' },
+      }));
+    }
+    expect(url.href).toBe('https://api.openai.com/v1/responses');
+    signalFromModel = init?.signal ?? undefined;
+    const signal = signalFromModel!;
+    return new Promise((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+  });
+  const res = await proxy.fetch(requestPlan(trip, 'application/x-ndjson'), {
+    ALLOWED_ORIGINS: origin, OPENAI_AGENTIC_ORIGIN: origin, OPENAI_API_KEY: 'fixture-key', WALKWE_DATA_ORIGIN: dataOrigin,
+    RATE_LIMITER: limiter, GLOBAL_LIMITER: limiter, AGENTIC_MODEL_LIMITER: limiter,
+  });
+  const reader = res.body!.getReader();
+  const first = await reader.read();
+  expect(JSON.parse(new TextDecoder().decode(first.value))).toEqual({ type: 'progress', stage: 'routes', state: 'working' });
+  await vi.waitFor(() => expect(signalFromModel).toBeDefined());
+  await reader.cancel();
+  expect(signalFromModel?.aborted).toBe(true);
 });
 
 it('prefills a draft with public landmark IDs without calling a provider', async () => {

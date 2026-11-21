@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { rankEvidence } from './route-evidence';
-import { handleAgenticCompanion, handleAgenticIntent, handleAgenticPlan } from './agentic-plan';
+import { handleAgenticCompanion, handleAgenticIntent, handleAgenticPlan, type AgenticProgress } from './agentic-plan';
 import { handleEvidence, isEvidencePath, type EvidenceEnv } from './evidence';
 import { createLiveSession, liveOffer, speakWithOpenAI } from './live';
 import { handleSos, type SosBindings } from './sos';
@@ -61,6 +61,33 @@ const agenticHandlers = new Map<string, (body: unknown, env: Env, signal: AbortS
 
 const json = (body: unknown, status: number, cors: HeadersInit) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...cors } });
+
+const PLAN_EVENTS = 'application/x-ndjson';
+
+function streamPlan(body: unknown, env: Env, signal: AbortSignal, noStore: HeadersInit): Response {
+  const downstream = new AbortController();
+  const active = AbortSignal.any([signal, downstream.signal]);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: { type: 'progress' } & AgenticProgress | { type: 'result'; result: unknown } | { type: 'error' }) => {
+        if (!active.aborted) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      const onProgress = (progress: AgenticProgress) => send({ type: 'progress', ...progress });
+      void handleAgenticPlan(body, env, active, onProgress).then(
+        ({ status, body }) => send(status === 200 ? { type: 'result', result: body } : { type: 'error' }),
+        () => send({ type: 'error' }),
+      ).finally(() => { if (!downstream.signal.aborted) controller.close(); });
+    },
+    cancel() {
+      downstream.abort();
+    },
+  });
+  const headers = new Headers(noStore);
+  headers.set('content-type', `${PLAN_EVENTS}; charset=utf-8`);
+  headers.append('vary', 'accept');
+  return new Response(stream, { headers });
+}
 
 function corsFor(req: Request, env: Env): HeadersInit | null {
   const origin = req.headers.get('origin') ?? '';
@@ -123,7 +150,11 @@ export default {
       const modelEnabled = env.OPENAI_API_KEY && env.RATE_LIMITER && env.GLOBAL_LIMITER
         && req.headers.get('origin') === env.OPENAI_AGENTIC_ORIGIN
         && (await env.AGENTIC_MODEL_LIMITER?.limit({ key: 'model' }).catch(() => ({ success: false })))?.success;
-      const result = await agenticHandler(body, modelEnabled ? env : { ...env, OPENAI_API_KEY: undefined }, req.signal);
+      const planEnv = modelEnabled ? env : { ...env, OPENAI_API_KEY: undefined };
+      if (path === '/agentic/plan' && req.headers.get('accept') === PLAN_EVENTS) {
+        return streamPlan(body, planEnv, req.signal, noStore);
+      }
+      const result = await agenticHandler(body, planEnv, req.signal);
       return json(result.body, result.status, noStore);
     }
 

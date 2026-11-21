@@ -2,13 +2,14 @@ import { z } from 'zod';
 import {
   applyApprovedLighting, isWeb2Place, publicWeb2Places, type RoutingResult,
 } from '../../web2/agentic/routing-core.mjs';
-import { createWorkflows } from '../../../packages/walkwe-agentic/src/agentic-workflow/agents.mjs';
+import { createWorkflows, type PlanProgress } from '../../../packages/walkwe-agentic/src/agentic-workflow/agents.mjs';
 import { createModelClient } from '../../../packages/walkwe-agentic/src/integrations/openai.mjs';
 import { loadHostedRouting } from './agentic-routing';
 import { readApprovedLighting, type EvidenceEnv } from './evidence';
 import type { Env } from './index';
 
 type AgenticEnv = EvidenceEnv & Pick<Env, 'RATE_LIMITER' | 'GLOBAL_LIMITER'>;
+export type AgenticProgress = PlanProgress | { stage: 'routes'; state: 'working' | 'done' | 'fallback' };
 
 const dayStamp = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(date => {
   const instant = new Date(`${date}T00:00:00Z`);
@@ -63,13 +64,22 @@ function planText(plan: Extract<RoutingResult, { status: 'ok' }>, lang: 'th' | '
   return `${plan.stress.flipped ? 'ข้อมูลไฟที่ยังไม่ทราบมีผลต่อคำแนะนำ ' : ''}${walk} ช่วงที่มีข้อมูลว่ามีไฟ ${Math.round(route.lit)} ม. ไม่ทราบสถานะไฟ ${Math.round(route.unknown)} ม.`;
 }
 
-export async function handleAgenticPlan(body: unknown, env: AgenticEnv, signal: AbortSignal) {
+export async function handleAgenticPlan(
+  body: unknown, env: AgenticEnv, signal: AbortSignal, onProgress?: (progress: AgenticProgress) => void,
+) {
   const parsed = planSchema.safeParse(body);
   if (!parsed.success) return invalid;
   const request = parsed.data;
   try {
+    signal.throwIfAborted();
+    onProgress?.({ stage: 'routes', state: 'working' });
     const dataset = await loadHostedRouting(env.WALKWE_DATA_ORIGIN);
+    signal.throwIfAborted();
     let route = dataset.workflowOptions.route(request);
+    if (route.status === 'ok') {
+      onProgress?.({ stage: 'routes', state: 'done' });
+      onProgress?.({ stage: 'evidence', state: 'working' });
+    }
     if (route.status === 'ok' && route.mode === 'night') {
       const ids = [...new Set(route.routes.flatMap(candidate => candidate.segments
         .filter(segment => segment.light === 'unknown' && dataset.segmentKnown(segment.id))
@@ -77,13 +87,15 @@ export async function handleAgenticPlan(body: unknown, env: AgenticEnv, signal: 
       const approved = await readApprovedLighting(env, dataset.version, ids).catch(() => new Map());
       route = applyApprovedLighting(route, approved, request.preference);
     }
+    signal.throwIfAborted();
     const model = getModel(env);
     const workflows = createWorkflows({ ...dataset.workflowOptions, model, route: () => route });
-    const plan = await workflows.plan(request, { useModel: Boolean(model), signal });
+    const plan = await workflows.plan(request, { useModel: Boolean(model), signal, onProgress });
     if (plan.status !== 'ok') {
       if (plan.status === 'worker_error' || plan.status === 'stale_snapshot') return unavailable;
       return { status: 200, body: { status: plan.status, decision: plan.decision } };
     }
+    onProgress?.({ stage: 'review', state: plan.source === 'verified_planner' ? 'done' : 'fallback' });
     const en = request.language === 'en';
     const clarification = !request.preference && plan.stress.flipped ? {
       id: 'night_lighting_preference',

@@ -30,18 +30,23 @@ test('public-place draft and one night clarification preserve the selected map r
       intentCalls += 1;
       await route.fulfill({ headers: cors, json: {
         status: 'confirm', from: intentCalls === 1 ? 'not-a-public-landmark' : from,
-        to, time: '20:00', mode: 'night', noStairs: false,
+        to, time: '20:00', mode: 'night', noStairs: false, source: 'gpt-6.1-terra',
       } });
       return;
     }
     expect(request.url()).toBe(`${proxy}/agentic/plan`);
+    expect(request.headers().accept).toBe('application/x-ndjson');
     planCalls.push(input);
     const answered = input.preference === 'prefer_evidence';
-    await route.fulfill({ headers: cors, json: {
-      status: 'ok', datasetVersion: 'test-web2-snapshot', provenance: 'public_web2_graph', source: 'verified_planner',
+    const result = {
+      status: 'ok', datasetVersion: 'test-web2-snapshot', provenance: 'public_web2_graph', source: answered ? 'worker' : 'verified_planner',
       decision: answered ? 'ACT' : 'VERIFY',
       text: answered ? 'Review updated using the better-documented route.' : 'Some lighting evidence is missing.',
       recommendedId: answered ? 'evidence-route' : 'direct-route', evidenceIds: ['lighting:unknown-crossing'],
+      routes: [
+        { id: 'direct-route', meters: 311, lit: 32, unknown: 279, minutes: 4, sunMinutes: null },
+        { id: 'evidence-route', meters: 316, lit: 156, unknown: 160, minutes: 4, sunMinutes: null },
+      ],
       clarification: {
         id: 'night_lighting_preference', text: 'Which lighting preference should the review use?',
         options: [
@@ -49,8 +54,17 @@ test('public-place draft and one night clarification preserve the selected map r
           { label: 'Prefer more lighting evidence', value: 'prefer_evidence', ref: 'evidence-route' },
         ],
       },
-      trace: [{ step: 'get_segment_evidence', status: 'ok' }, { step: 'verify', passed: true }],
-    } });
+      trace: answered ? [] : [{ step: 'get_segment_evidence', status: 'ok' }, { step: 'verify', passed: true }, { step: 'critic', passed: true }],
+    };
+    if (answered) await route.fulfill({ headers: cors, json: result });
+    else {
+      const events = ['routes', 'evidence', 'review', 'critique'].flatMap(stage => ['working', 'done']
+        .map(state => ({ type: 'progress', stage, state })));
+      await route.fulfill({
+        headers: cors, contentType: 'application/x-ndjson',
+        body: [...events, { type: 'result', result }].map(event => JSON.stringify(event)).join('\n') + '\n',
+      });
+    }
   });
 
   await page.goto('/plan');
@@ -62,6 +76,7 @@ test('public-place draft and one night clarification preserve the selected map r
 
   await ask.getByRole('button', { name: 'Fill trip details' }).click();
   await expect(ask.getByRole('status')).toHaveText('Check the places and time, then tap See routes.');
+  await expect(ask).toContainText('AI extracted places, time and constraints from your request.');
   await expect(page.getByTestId('point-from')).toContainText('BTS Siam');
   await expect(page.getByTestId('point-to')).toContainText('centralwOrld');
   await expect(page.getByTestId('mode-night')).toHaveAttribute('aria-pressed', 'true');
@@ -78,16 +93,26 @@ test('public-place draft and one night clarification preserve the selected map r
   const review = page.getByTestId('agentic-review');
   await review.getByRole('button', { name: 'Review evidence', exact: true }).click();
   await expect(review).toContainText('Some lighting evidence is missing.');
-  await review.getByText('Evidence and checks').click();
+  await expect(review.locator('[data-stage][data-stage-state="done"]')).toHaveCount(4);
+  await expect(review.locator('.agentic-route-metrics')).toContainText('279 m');
+  await review.getByText('Evidence segment IDs').click();
   await expect(review.getByText('lighting:unknown-crossing')).toBeVisible();
   expect(planCalls).toEqual([{ from, to, time: '20:00', date: '2026-10-15', mode: 'night', language: 'en', noStairs: false }]);
 
   await review.getByRole('button', { name: 'Prefer more lighting evidence' }).click();
   await expect(review).toContainText('Review updated using the better-documented route.');
+  await expect(review).toContainText('The suggestion changed with your choice about unverified lighting.');
+  await expect(review.locator('.agentic-route-metrics')).toContainText('160 m');
+  await expect(review.locator('.agentic-route-metrics')).toContainText('Previously 279 m');
+  await expect(review.locator('[data-stage="review"]')).toHaveAttribute('data-stage-state', 'fallback');
+  await expect(review.locator('[data-stage="critique"]')).toHaveAttribute('data-stage-state', 'skipped');
   await expect(review.getByRole('button', { name: 'Prefer more lighting evidence' })).toHaveCount(0);
   await expect(selected).toHaveAttribute('data-testid', selectedId!);
   await expect(page.getByTestId('start-nav')).toBeEnabled();
   expect(intentCalls).toBe(2);
   expect(planCalls).toHaveLength(2);
   expect(planCalls[1]).toEqual({ ...(planCalls[0] as object), preference: 'prefer_evidence' });
+  const steps = review.getByRole('list', { name: 'Route review steps' });
+  await steps.scrollIntoViewIfNeeded();
+  await expect(steps).toBeInViewport();
 });

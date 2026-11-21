@@ -161,6 +161,7 @@ export function RouteResults({ state, selected, onSelect, onRetry, onStart, onCh
   return (
     <div className="results">
       <ul className="list route-list">{result.routes.map(card)}</ul>
+      {state.agentRequest && <AgenticReview key={JSON.stringify([state.agentRequest, lang])} request={{ ...state.agentRequest, language: lang }} />}
       {result.routes[selected] && (
         <>
           {(!night || !result.routes[selected]!.evidence?.length) &&
@@ -168,7 +169,6 @@ export function RouteResults({ state, selected, onSelect, onRetry, onStart, onCh
           <RouteEvidence key={selected} route={result.routes[selected]!} shortest={shortest} mode={mode} />
         </>
       )}
-      {state.agentRequest && <AgenticReview key={JSON.stringify([state.agentRequest, lang])} request={{ ...state.agentRequest, language: lang }} />}
       {/* Pinned to the sheet's foot on phones: the main action never hides below the fold. */}
       <div className="start-dock">
         <button type="button" className="btn btn--primary" onClick={onStart} data-testid="start-nav">

@@ -17,7 +17,7 @@ const th = {
   'common.save': 'บันทึก',
   'common.saved': 'บันทึกแล้ว',
 
-  'evidence.title': "หลักฐานเส้นทาง",
+  'evidence.title': "หลักฐานของทางที่เลือกบนแผนที่",
   'evidence.kind.go': "จุดเด่น",
   'evidence.kind.caution': "ควรสังเกต",
   'evidence.kind.avoid': "ในทางเลือกที่สั้นกว่า",
@@ -466,7 +466,7 @@ const en: Record<StringKey, string> = {
   'common.save': 'Save',
   'common.saved': 'Saved',
 
-  'evidence.title': "Route evidence",
+  'evidence.title': "Evidence for the selected map route",
   'evidence.kind.go': "Benefit",
   'evidence.kind.caution': "Check this stretch",
   'evidence.kind.avoid': "On the shortest alternative",

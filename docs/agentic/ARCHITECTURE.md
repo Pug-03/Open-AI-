@@ -40,6 +40,8 @@ The web2 Agentic development host uses the same AreaRouter, public landmarks, an
 
 The Web2 proxy exposes `/agentic/intent`, `/agentic/plan`, and `/agentic/companion`. The planner computes routes from catalogue landmark IDs and the trusted public graph. Private pins and GPS continue to route on-device. The server may use a different route because it compares candidates with its own graph inputs. Web2 shows the server review separately and retains the user's map selection when an answer changes the lighting preference. Approved lighting is applied only to the exact edge in a matching graph version.
 
+After the user opens route review, Web2 requests newline-delimited JSON with `Accept: application/x-ndjson`. The proxy emits operational milestones for route calculation, evidence collection, proposal verification and an additional AI review when invoked. Each milestone reports its observed status. The terminal result carries the checked recommendation and its source. Clients can also request the existing JSON result. GPT‑Live currently uses the Intent endpoint to draft trip fields and answers navigation questions from app-held route facts. The route-review action starts the Planner and Critic workflow.
+
 The Worker configuration declares `EVIDENCE_QUEUE` and `SOS_OUTBOX` as SQLite-backed Durable Objects. Provider speech, the authenticated browser flows, real SOS delivery, and the exact deployed Worker version require staging verification.
 
 ## Local environment

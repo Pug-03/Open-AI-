@@ -61,7 +61,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     };
   }
 
-  async function plan(request, { useModel = false, snapshot, expectedDatasetVersion = snapshot?.datasetVersion, signal } = {}) {
+  async function plan(request, { useModel = false, snapshot, expectedDatasetVersion = snapshot?.datasetVersion, signal, onProgress } = {}) {
     if (!request || !placeIds.has(request.from) || !placeIds.has(request.to)) return stateError("out_of_coverage");
     let result;
     try {
@@ -75,6 +75,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     if (!evidence || (expectedDatasetVersion && result.datasetVersion !== expectedDatasetVersion)) {
       return stateError("stale_snapshot");
     }
+    onProgress?.({ stage: "evidence", state: "done" });
     const clarification = result.stress.flipped && !["direct", "prefer_evidence"].includes(request.preference)
       ? { id: "night_lighting_preference", choices: ["direct", "prefer_evidence"] }
       : null;
@@ -84,8 +85,9 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     if (!useModel || !model) return fallback;
     const facts = plannerContext(request, result);
     if (!facts) return { ...fallback, fallback: "context_budget" };
+    onProgress?.({ stage: "review", state: "working" });
     const { verified, trace, loop, final, question, fallback: reason } = await runPlannerHarness({
-      model, result, facts, evidence, signal, places, rankUnknowns,
+      model, result, facts, evidence, signal, places, rankUnknowns, onProgress,
       suggestDeparture: departure ? (routeId, delay) => departure(request, routeId, delay, snapshot) : undefined,
     });
     return verified

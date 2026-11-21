@@ -1,6 +1,11 @@
 import type { ModelClient } from '../integrations/openai.mjs';
 import type { RoutingPlace, RoutingResult, RoutingTrip } from '../../../../apps/web2/agentic/routing-core.mjs';
 
+export type PlanProgress = {
+  stage: 'evidence' | 'review' | 'critique';
+  state: 'working' | 'done' | 'fallback';
+};
+
 type PlanResult = Exclude<RoutingResult, { status: 'ok' }>
   | { status: 'worker_error' | 'stale_snapshot'; decision: 'ABSTAIN' }
   | (Extract<RoutingResult, { status: 'ok' }> & {
@@ -15,7 +20,9 @@ export function createWorkflows(options?: {
   places?: RoutingPlace[];
   departure?: (request: RoutingTrip, routeId: string, delay: number) => unknown;
 }): {
-  plan(request: RoutingTrip, options?: { useModel?: boolean; signal?: AbortSignal }): Promise<PlanResult>;
+  plan(request: RoutingTrip, options?: {
+    useModel?: boolean; signal?: AbortSignal; onProgress?: (progress: PlanProgress) => void;
+  }): Promise<PlanResult>;
   intent(request: { text: string; useModel?: boolean; signal?: AbortSignal }): Promise<{ status: 'invalid' } | {
     status: 'confirm'; source: string;
     draft: { from: string | null; to: string | null; time: string | null;
