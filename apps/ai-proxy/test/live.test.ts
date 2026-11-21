@@ -30,7 +30,16 @@ it('registers the Walk We tools by screen and gives the browser only the SDP ans
   expect(session).toMatchObject({ model: 'gpt-live-1.1', store: false, delegation: { type: 'responses', responses: { model: 'gpt-6.1-terra', parallel_tool_calls: false } } });
   expect(session.delegation.responses.tools.map((tool: { name: string }) => tool.name)).toEqual(screenTools.navigate);
   expect(new Set(Object.values(screenTools).flat())).toEqual(new Set(Object.keys(voiceTools)));
-  expect(Object.keys(voiceTools)).toHaveLength(13);
+  expect(Object.keys(voiceTools)).toHaveLength(16);
+
+  await worker.fetch(post('/voice/live', { ...offer, screen: 'plan' }), env);
+  const planSession = JSON.parse(upstream.mock.lastCall![1].body as string).session;
+  expect(planSession.delegation.responses.tools.map((tool: { name: string }) => tool.name)).toEqual(screenTools.plan);
+  expect(screenTools.plan).toEqual(expect.arrayContaining([
+    'plan_trip', 'find_routes', 'review_route', 'answer_route_review', 'ask_trip', 'start_navigation',
+  ]));
+  expect(planSession.delegation.responses.instructions).toContain('wait for the user’s next turn');
+  expect(planSession.delegation.responses.instructions).toContain('prefer_evidence means assume they are dark');
 });
 
 it('uses the deterministic Intent if the paid Agentic budget or origin is unavailable', async () => {

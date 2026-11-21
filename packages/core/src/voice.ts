@@ -10,6 +10,12 @@ const withLanguage = <T extends z.ZodRawShape>(fields: T) => z.strictObject({ ..
 export const voiceTools = {
   plan_trip: { description: 'Prefill a walk from the exact latest request. Quote the user without inventing or translating a place name. Let them confirm the places.',
     schema: withLanguage({ utterance: short(300) }) },
+  find_routes: { description: 'Calculate routes only when the user asks to find routes for the points already confirmed in the app.',
+    schema: withLanguage({}) },
+  review_route: { description: 'Check the evidence for the current walk when the user asks to review or verify a route. The app owns the route and may ask a follow-up question about missing lighting.',
+    schema: withLanguage({}) },
+  answer_route_review: { description: 'Answer the app’s outstanding question about unmapped lighting only when the user makes an explicit choice. Choose direct for assuming unmapped stretches are lit, or prefer_evidence for assuming they are dark. An assumption does not change observed lighting.',
+    schema: withLanguage({ preference: z.enum(['direct', 'prefer_evidence']) }) },
   ask_trip: { description: 'Explain the active route or compare it to alternatives using verified app data.',
     schema: withLanguage({ question: short(300) }) },
   change_route: { description: 'Ask the app for a different existing route or route preference. Never invent an alternative.',
@@ -41,10 +47,12 @@ export type VoiceActions = { [K in VoiceToolName]?: (args: VoiceArguments<K>, si
 export const voiceScreen = z.enum(['plan', 'results', 'navigate', 'arrival']);
 export type VoiceScreen = z.infer<typeof voiceScreen>;
 const common = ['set_theme', 'set_preference', 'open_sos_sheet'] as const;
+const review = ['review_route', 'answer_route_review'] as const;
+const compare = ['ask_trip', 'select_route', 'change_route', 'start_navigation'] as const;
 export const screenTools = {
-  plan: ['plan_trip', ...common],
-  results: ['ask_trip', 'select_route', 'change_route', 'start_navigation', ...common],
-  navigate: ['ask_trip', 'repeat_instruction', 'stop_navigation', 'start_live_share', 'companion_call', ...common],
+  plan: ['plan_trip', 'find_routes', ...review, ...compare, ...common],
+  results: [...review, ...compare, ...common],
+  navigate: ['ask_trip', ...review, 'repeat_instruction', 'stop_navigation', 'start_live_share', 'companion_call', ...common],
   arrival: ['answer_question', ...common],
 } satisfies Record<VoiceScreen, VoiceToolName[]>;
 

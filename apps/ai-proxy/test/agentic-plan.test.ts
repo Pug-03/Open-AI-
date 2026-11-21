@@ -181,6 +181,29 @@ it('keeps unknown lighting unknown when comparing the two night preferences', as
   expect(direct.body.routes).toEqual(expect.arrayContaining(conservative.body.routes));
 });
 
+it('asks once about missing lighting even if both choices retain the same route', async () => {
+  vi.stubGlobal('fetch', async (input: string | URL) => {
+    const path = new URL(input).pathname;
+    return new Response(path.includes('/areas/') ? area : incidents, { headers: { 'content-type': 'application/json' } });
+  });
+  const env = { WALKWE_DATA_ORIGIN: 'https://stable-night-test.example' };
+  const night = { ...trip, to: 'osm:W157482067', mode: 'night', time: '21:00' };
+  const unchosen = await handleAgenticPlan(night, env, signal);
+  if (!('recommendedId' in unchosen.body)) throw new Error('missing routes');
+  const routeId = unchosen.body.recommendedId;
+  expect(unchosen.body).toMatchObject({
+    status: 'ok', decision: 'ACT', evidenceIds: expect.arrayContaining([expect.stringMatching(/^edge:/)]),
+    clarification: {
+      text: expect.stringContaining('Both assumptions suggest the same route'),
+      options: [{ value: 'direct', ref: routeId }, { value: 'prefer_evidence', ref: routeId }],
+    },
+  });
+  const answered = await handleAgenticPlan({ ...night, preference: 'prefer_evidence' }, env, signal);
+  expect(answered.body).toMatchObject({
+    status: 'ok', recommendedId: routeId, decision: 'ACT', clarification: null, routes: unchosen.body.routes,
+  });
+});
+
 it('localizes companion guidance and keeps the two-alert limit and silent model choice', async () => {
   const event = { event: 'closing', unknownMeters: 12, language: 'en', warnings: 1, handled: ['nightfall'] };
   const local = await handleAgenticCompanion(event, {}, signal);

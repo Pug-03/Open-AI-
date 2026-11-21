@@ -15,6 +15,9 @@ export async function createLiveSession(key: string, offer: z.infer<typeof liveO
     const { $schema, ...parameters } = z.toJSONSchema(schema);
     return { type: 'function', name, description, parameters, strict: true };
   });
+  const reviewInstructions = tools.some(tool => tool.name === 'review_route')
+    ? ' For an explicit request to check or verify route evidence, call review_route. If its result asks about unmapped lighting, wait for the user’s next turn. Call answer_route_review only after an explicit choice: direct means assume unmapped stretches are lit, and prefer_evidence means assume they are dark. Repeat the question if the next turn is ambiguous. Treat these choices as assumptions only. Use the app tool result verbatim for the question and checked result.'
+    : '';
   const res = await fetch('https://api.openai.com/v1/live/sessions', {
     method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({
@@ -25,7 +28,7 @@ export async function createLiveSession(key: string, offer: z.infer<typeof liveO
         delegation: {
           type: 'responses', responses: {
             model: 'gpt-6.1-terra',
-            instructions: `Use the app tools for the caller's exact request, at most one changing action per turn. Default reply language: ${offer.lang}. Choose th or en for a full user request or explicit language preference, and both only on explicit request. Foreign place names alone do not switch language. Do not guess locations, directions, measures, access or lighting. If route ends are missing or ambiguous, leave them for confirmation. For SOS or sharing, open the app controls only. After a tool result, finish this delegated response without starting another action.`,
+            instructions: `Use the app tools for the caller's exact request, with one tool call per user turn. Default reply language: ${offer.lang}. Choose th or en for a full user request or explicit language preference, and both only on explicit request. Foreign place names alone do not switch language. Do not guess locations, directions, measures, access or lighting. Ask the user to confirm the route ends. For SOS or sharing, open the app controls only. After a tool result, finish this delegated response without starting another action.${reviewInstructions}`,
             tool_choice: 'auto', parallel_tool_calls: false, tools,
           },
         },

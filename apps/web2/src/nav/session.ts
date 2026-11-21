@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { activeCity } from '@walkwe/config';
 import { isOpenAt, matchGuide, parseOpeningHours, type LatLng, type Route, type RouteStep, type WalkMode } from '@walkwe/core';
 import type { GuideDirection, RouteGuide } from '@walkwe/data';
+import { routeRequestSchema, type AgenticRequest } from '../agenticRequest.ts';
 import { readJson, storage, writeJson } from '../utils/storage.ts';
 
 // A navigation session: the chosen route plus the steps to show. Steps come
@@ -37,6 +38,8 @@ export interface NavSession {
   destinationName?: string;
   /** The shortest route's figures, for the summary on arrival. */
   baseline?: RouteBaseline;
+  /** Public landmarks and original departure for an evidence review during navigation. */
+  reviewRequest?: AgenticRequest;
 }
 
 export interface RouteBaseline {
@@ -57,6 +60,7 @@ const sessionSchema = z.object({
   index: z.number().int().min(0),
   destinationName: z.string().optional(),
   baseline: z.object({ lengthM: z.number(), durationS: z.number(), shadeShare: z.number(), safetyScore: z.number().nullable() }).optional(),
+  reviewRequest: routeRequestSchema.omit({ preference: true }).optional().catch(undefined),
 });
 
 export function buildSession(route: Route, mode: WalkMode, from: LatLng, to: LatLng, guides: RouteGuide[], destinationName?: string, baseline?: RouteBaseline): NavSession {

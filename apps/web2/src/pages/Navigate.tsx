@@ -13,6 +13,7 @@ import { MapBoundary } from '../components/MapBoundary.tsx';
 import { InstallPrompt } from '../components/nav/InstallPrompt.tsx';
 import { ArrivalLighting } from '../components/nav/ArrivalLighting.tsx';
 import { TripCompanion } from '../components/nav/TripCompanion.tsx';
+import { AgenticReview } from '../components/plan/AgenticTrip.tsx';
 import { LiveVoice } from '../components/LiveVoice.tsx';
 import { StepCarousel } from '../components/nav/StepCarousel.tsx';
 import { PhotoViewer, StepPhoto } from '../components/nav/StepPhoto.tsx';
@@ -35,6 +36,8 @@ import { activeCity } from '@walkwe/config';
 import { formatDistance } from '../utils/format.ts';
 import { useDesktop } from '../utils/useDesktop.ts';
 import { verifiedRouteSummary } from '../voice/route.ts';
+import { routeReviewActions } from '../voice/reviewActions.ts';
+import { useRouteReview } from '../voice/routeReview.ts';
 
 const ICON: Record<RouteStep['maneuver'], typeof ArrowUp> = {
   depart: Footprints, straight: ArrowUp, 'slight-left': ArrowUpLeft, left: CornerUpLeft, 'sharp-left': CornerUpLeft,
@@ -73,6 +76,7 @@ export default function Navigate() {
   const nav = useNavigate();
   const go = useGo();
   const [session, setSession] = useState<NavSession | null>(loadSession);
+  const review = useRouteReview();
   const [manifest, setManifest] = useState<PhotoManifest | null>(null);
   const [view, setView] = useState<'steps' | 'map'>('steps');
   const [viewer, setViewer] = useState<{ photo: string; caption: string } | null>(null);
@@ -299,7 +303,9 @@ export default function Navigate() {
 
   readStepRef.current = readStep;
 
+  const reviewRequest = session.reviewRequest ? { ...session.reviewRequest, language: lang } : null;
   const navigationVoice: VoiceActions = {
+    ...routeReviewActions(review, () => reviewRequest, async () => reviewRequest),
     ask_trip: ({ language }) => verifiedRouteSummary(language, session.route, session.mode),
     repeat_instruction: ({ language, which }) => {
       const position = which === 'next_segment_warning' ? index + 1 : index;
@@ -399,7 +405,9 @@ export default function Navigate() {
       </div>
       <div className="nav-body">
         <TripCompanion key={session.id} session={session} online={online} replan={() => setConfirmExit(true)} />
-        {online && <LiveVoice key={`${session.id}:${index}`} screen="navigate" actions={navigationVoice} />}
+        {online && <LiveVoice key={`${session.id}:${index}`} screen="navigate" actions={navigationVoice}
+          routeReady={!!reviewRequest} awaitingReviewChoice={!!review.pendingClarification} />}
+        {reviewRequest && (review.busy || review.failed || review.result) && <AgenticReview request={reviewRequest} review={review} />}
         <div className="nav-chips">
           {!online && (
             <span className="chip" role="status" data-testid="offline-chip">

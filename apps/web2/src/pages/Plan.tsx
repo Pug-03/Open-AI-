@@ -31,6 +31,8 @@ import { AgenticAsk } from '../components/plan/AgenticTrip.tsx';
 import { planRequest, publicLandmark, receiveIntent, type AgenticIntent } from '../agentic.ts';
 import { LiveVoice } from '../components/LiveVoice.tsx';
 import { verifiedRouteSummary } from '../voice/route.ts';
+import { routeReviewActions } from '../voice/reviewActions.ts';
+import { useRouteReview } from '../voice/routeReview.ts';
 import { WalkTimePanel, type Departure } from '../components/plan/WalkTimePanel.tsx';
 import { GeoHelp, type GeoProblem } from '../components/plan/GeoHelp.tsx';
 import { currentGeoEnvironment } from '../platform/geoEnv.ts';
@@ -110,6 +112,8 @@ export default function Plan() {
     writeJson(storage, FACTORS_KEY, f);
   };
   const [routingState, setRoutingState] = useState<RoutingState | null>(null);
+  const review = useRouteReview();
+  const [reviewFirst, setReviewFirst] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(0);
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
   const routeRun = useRef(0);
@@ -288,9 +292,13 @@ export default function Plan() {
     if (from && to) routing.warm().then(setMeta, () => {});
   }, [from, to]);
 
-  const findRoutes = async (at = departAt(), mode = modeOverride ?? autoMode) => {
-    if (!from || !to) return;
+  const findRoutes = async (
+    at = departAt(), mode = modeOverride ?? autoMode, signal?: AbortSignal,
+  ): Promise<Extract<RoutingState, { status: 'done' }> | null> => {
+    if (!from || !to || signal?.aborted) return null;
     const run = ++routeRun.current;
+    review.reset();
+    setReviewFirst(false);
     setMode({ type: 'results' });
     setSnap('half');
     setSelectedRoute(0);
@@ -298,27 +306,43 @@ export default function Plan() {
     // Walking only: a trip whose straight line is already past the limit isn't routed.
     if (haversineMeters(from.location, to.location) > activeCity.maxWalkM) {
       setRoutingState({ status: 'error', reason: 'too-far' });
-      return;
+      return null;
     }
     // Cloud cover only matters by day; never let a slow forecast hold up the route.
-    const cloud =
-      mode === 'day'
-        ? await Promise.race([weather.cloudCover(at, from.location).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2500))])
-        : null;
+    const cancel = () => {
+      if (run !== routeRun.current) return;
+      routeRun.current++;
+      setRoutingState(null);
+      setMode({ type: 'overview' });
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
     try {
+      const cloud = mode === 'day'
+        ? await Promise.race([weather.cloudCover(at, from.location).catch(() => null), new Promise<null>(resolve => setTimeout(() => resolve(null), 2500))])
+        : null;
+      if (run !== routeRun.current || signal?.aborted) return null;
       const raw = await routing.route({ from: from.location, to: to.location, departAt: at, mode, cloudCover: cloud, nightFactors: factors, stepFree: access.stepFree }, true);
       // Keep only walks within the limit (a detour for shade can push one over).
       const routes = raw.routes.filter((r) => r.lengthM <= activeCity.maxWalkM);
-      if (run !== routeRun.current) return;
-      if (!routes.length) setRoutingState({ status: 'error', reason: access.stepFree ? 'too-far-step-free' : 'too-far' });
-      else setRoutingState({
+      if (run !== routeRun.current || signal?.aborted) return null;
+      if (!routes.length) {
+        setRoutingState({ status: 'error', reason: access.stepFree ? 'too-far-step-free' : 'too-far' });
+        return null;
+      }
+      const done: Extract<RoutingState, { status: 'done' }> = {
         status: 'done', result: { ...raw, routes }, mode, cloud,
         agentRequest: planRequest(from, to, localInputValue(at, activeCity.timezone),
           { mode, language: lang, noStairs: access.stepFree }),
-      });
+      };
+      setRoutingState(done);
+      return done;
     } catch (e) {
-      if (run !== routeRun.current) return;
-      setRoutingState({ status: 'error', reason: e instanceof RoutingError ? e.reason : 'failed' });
+      if (run === routeRun.current && !signal?.aborted) {
+        setRoutingState({ status: 'error', reason: e instanceof RoutingError ? e.reason : 'failed' });
+      }
+      return null;
+    } finally {
+      signal?.removeEventListener('abort', cancel);
     }
   };
   // Judges' demo: plan the sample route straight away, once.
@@ -340,31 +364,57 @@ export default function Plan() {
     const all = routingState.result.routes;
     const shortest = all.find((r) => r.kinds.includes('shortest')) ?? all[0]!;
     const baseline = { lengthM: shortest.lengthM, durationS: shortest.durationS, shadeShare: shortest.shadeShare, safetyScore: shortest.safetyScore };
-    saveSession(buildSession(route, routingState.mode, from.location, to.location, guides, to.name, baseline));
+    saveSession({
+      ...buildSession(route, routingState.mode, from.location, to.location, guides, to.name, baseline),
+      ...(routingState.agentRequest ? { reviewRequest: routingState.agentRequest } : {}),
+    });
     navigateTo('/navigate');
     return true;
   };
 
   const leaveResults = () => {
     routeRun.current++;
+    review.reset();
     setRoutingState(null);
     setMode({ type: 'overview' });
     setSnap('half');
   };
 
+  const currentReviewRequest = mode.type === 'results' && routingState?.status === 'done' && routingState.agentRequest
+    ? { ...routingState.agentRequest, language: lang } : null;
   const planVoice: VoiceActions = {
+    ...routeReviewActions(review, () => currentReviewRequest, async signal => {
+      if (mode.type === 'results') return currentReviewRequest;
+      return (await findRoutes(undefined, undefined, signal))?.agentRequest ?? null;
+    }, () => {
+      setReviewFirst(true);
+      setSnap('full');
+    }),
     plan_trip: async ({ utterance, language }, signal) => {
       const draft = await receiveIntent(utterance, language === 'both' ? lang : language, signal);
       if (signal.aborted || (!draft.from && !draft.to)) return [];
       applyIntent(draft);
+      if (mode.type === 'results') leaveResults();
       return speechParts(language, locale => locale === 'th'
-        ? 'เติมข้อมูลทริปแล้ว ตรวจสถานที่และเวลาก่อนกดดูเส้นทาง'
-        : 'I filled in the trip details. Check the places and time before finding routes.');
+        ? 'เติมข้อมูลทริปแล้ว ตรวจสถานที่กับเวลา จากนั้นพูดว่า หาเส้นทาง หรือ ตรวจเส้นทาง'
+        : 'I filled in the trip details. Confirm the places and time by saying find routes or review the route.');
+    },
+    find_routes: async ({ language }, signal) => {
+      if (!from || !to) return speechParts(language, locale => locale === 'th'
+        ? 'เลือกต้นทางกับปลายทางก่อน หรือบอกทริปเป็นประโยคได้เลย'
+        : 'Pick a start and destination, or describe the trip first.');
+      if (mode.type === 'results' && routingState?.status === 'loading') return [];
+      const done = await findRoutes(undefined, undefined, signal);
+      if (signal.aborted) return [];
+      return speechParts(language, locale => done
+        ? (locale === 'th' ? 'แสดงทางเลือกแล้ว คุณพูดว่า ตรวจเส้นทาง เพื่อดูหลักฐานเพิ่มเติมได้'
+          : 'Your route choices are on screen. Say review the route to check the evidence.')
+        : (locale === 'th' ? 'ยังหาเส้นทางไม่ได้ ลองตรวจสถานที่บนหน้าจอ' : 'I could not find routes. Check your places on the screen.'));
     },
   };
 
   const resultsVoice: VoiceActions = {};
-  if (routingState?.status === 'done') {
+  if (mode.type === 'results' && routingState?.status === 'done') {
     const { result, mode: walkMode } = routingState;
     const shortest = result.routes.find(route => route.kinds.includes('shortest'));
     const summary = (routeIndex: number, language: 'th' | 'en' | 'both') => {
@@ -410,7 +460,7 @@ export default function Plan() {
   let body: React.ReactNode = null;
   if (mode.type === 'results' && routingState) {
     header = <ResultsHeader onBack={leaveResults} mode={routingState.status === 'done' ? routingState.mode : (modeOverride ?? autoMode)} />;
-    body = (<>
+    body = (
       <RouteResults
         state={routingState}
         selected={selectedRoute}
@@ -420,6 +470,8 @@ export default function Plan() {
         loadingMode={modeOverride ?? autoMode}
         onStart={() => void startNavigation()}
         meta={meta}
+        review={review}
+        reviewFirst={reviewFirst}
         trip={from && to ? { from: from.location, to: to.location } : null}
         onLeaveAt={(at) => {
           // An hour already gone today means the same hour tomorrow.
@@ -429,8 +481,7 @@ export default function Plan() {
           void findRoutes(when, modeForTime(when, from?.location ?? activeCity.center));
         }}
       />
-      {routingState.status === 'done' && <LiveVoice screen="results" actions={resultsVoice} />}
-    </>);
+    );
   } else if (mode.type === 'pin') {
     header = (
       <div className="pin-head">
@@ -517,7 +568,6 @@ export default function Plan() {
     body = (
       <>
         <AgenticAsk onDraft={applyIntent} />
-        <LiveVoice screen="plan" actions={planVoice} />
         {from && to && (
           <div className="ready fade-in" data-testid="ready" role="status">
             <span className="ready-title">
@@ -592,6 +642,9 @@ export default function Plan() {
       </header>
 
       <BottomSheet snap={snap} onSnapChange={setSnap} header={header} onVisibleHeight={setSheetH} label={t('plan.whereTo')}>
+        {(mode.type === 'overview' || mode.type === 'results') && <LiveVoice screen="plan"
+          actions={{ ...planVoice, ...resultsVoice }} routeReady={routingState?.status === 'done'}
+          awaitingReviewChoice={!!review.pendingClarification} />}
         {body}
       </BottomSheet>
 

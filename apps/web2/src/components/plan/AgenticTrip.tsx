@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { AgenticIntent, AgenticPlan, AgenticRequest, RoutePreference } from '../../agentic.ts';
-import { receiveIntent, reviewRoute } from '../../agentic.ts';
+import { receiveIntent, type AgenticIntent, type AgenticRequest } from '../../agentic.ts';
 import { env } from '../../env.ts';
 import { useI18n } from '../../store/i18n.tsx';
-import { AgenticProgress, type AgenticProgressStages } from './AgenticProgress.tsx';
+import type { RouteReviewController } from '../../voice/routeReview.ts';
+import { AgenticProgress } from './AgenticProgress.tsx';
 
 export function AgenticAsk({ onDraft }: { onDraft: (draft: AgenticIntent) => void }) {
   const { lang } = useI18n();
@@ -61,54 +61,10 @@ export function AgenticAsk({ onDraft }: { onDraft: (draft: AgenticIntent) => voi
   );
 }
 
-export function AgenticReview({ request }: { request: AgenticRequest }) {
+export function AgenticReview({ request, review }: { request: AgenticRequest; review: RouteReviewController }) {
   const th = request.language === 'th';
-  const [result, setResult] = useState<AgenticPlan | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [answered, setAnswered] = useState(false);
-  const [change, setChange] = useState<{ previousUnknown?: number } | null>(null);
-  const [stages, setStages] = useState<AgenticProgressStages>({});
-  const pending = useRef<AbortController | null>(null);
-  useEffect(() => () => pending.current?.abort(), []);
   if (!env.voiceProxyUrl) return null;
-
-  async function analyse(preference?: RoutePreference) {
-    if (pending.current) return;
-    const controller = new AbortController();
-    pending.current = controller;
-    setBusy(true);
-    setFailed(false);
-    setStages({});
-    try {
-      const assessed = await reviewRoute({ ...request, preference }, controller.signal, ({ stage, state }) => {
-        if (!controller.signal.aborted) setStages(previous => ({ ...previous, [stage]: state }));
-      });
-      if (controller.signal.aborted) return;
-      setResult(assessed);
-      if (assessed.status === 'ok') {
-        const critic = assessed.trace?.filter(entry => entry.step === 'critic').at(-1);
-        setStages(previous => ({
-          ...previous,
-          routes: 'done',
-          evidence: 'done',
-          review: assessed.source === 'verified_planner' ? 'done' : 'fallback',
-          ...(critic?.passed != null ? { critique: critic.passed ? 'done' : 'fallback' } : {}),
-        }));
-      }
-      if (preference && result?.status === 'ok' && assessed.status === 'ok'
-        && result.datasetVersion === assessed.datasetVersion && result.recommendedId !== assessed.recommendedId) {
-        const priorRoute = result.routes?.find(candidate => candidate.id === result.recommendedId);
-        setChange({ previousUnknown: priorRoute?.unknown });
-      } else setChange(null);
-      if (preference) setAnswered(true);
-    } catch {
-      if (!controller.signal.aborted) setFailed(true);
-    } finally {
-      if (pending.current === controller) pending.current = null;
-      if (!controller.signal.aborted) setBusy(false);
-    }
-  }
+  const { result, busy, failed, change, stages, pendingClarification, run } = review;
 
   const route = result?.status === 'ok' ? result.routes?.find(candidate => candidate.id === result.recommendedId) : undefined;
   const lang = request.language;
@@ -119,7 +75,7 @@ export function AgenticReview({ request }: { request: AgenticRequest }) {
       <p className="small">{th
         ? 'Walk We เทียบทางตามเวลาออกเดิน AI ช่วยอ่านหลักฐานเมื่อเปิดใช้งาน คุณยังเป็นคนเลือกทางบนแผนที่'
         : 'Walk We compares routes at your departure time. When enabled, AI helps review the evidence. You choose the route on the map.'}</p>
-      {!result && <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void analyse()}>
+      {!result && <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void run(request)}>
         {th ? 'ตรวจหลักฐาน' : 'Review evidence'}
       </button>}
       {(busy || failed || result) && <AgenticProgress lang={lang} stages={stages} busy={busy}
@@ -152,11 +108,11 @@ export function AgenticReview({ request }: { request: AgenticRequest }) {
             </> : route.sunMinutes != null && <div><dt>{th ? 'คาดว่าโดนแดด' : 'Estimated sun'}</dt>
               <dd>{route.sunMinutes} {th ? 'นาที' : 'min'}</dd></div>}
           </dl>}
-          {result.clarification && !answered && (
+          {pendingClarification && (
             <>
-              <p className="small">{result.clarification.text}</p>
-              {result.clarification.options.map(option => (
-                <button key={option.value} className="btn btn--ghost" type="button" disabled={busy} onClick={() => void analyse(option.value)}>
+              <p className="small">{pendingClarification.text}</p>
+              {pendingClarification.options.map(option => (
+                <button key={option.value} className="btn btn--ghost" type="button" disabled={busy} onClick={() => void run(request, option.value)}>
                   {option.label}
                 </button>
               ))}

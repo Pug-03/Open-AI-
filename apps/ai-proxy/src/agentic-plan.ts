@@ -97,13 +97,26 @@ export async function handleAgenticPlan(
     }
     onProgress?.({ stage: 'review', state: plan.source === 'verified_planner' ? 'done' : 'fallback' });
     const en = request.language === 'en';
-    const clarification = !request.preference && plan.stress.flipped ? {
+    const { stress } = plan;
+    const selected = plan.routes.find(item => item.id === plan.recommendedId)!;
+    const missingLighting = plan.mode === 'night' && selected.unknown > 0;
+    const evidenceIds = stress.flipped ? stress.evidenceIds : missingLighting
+      ? [...new Set(selected.segments.filter(segment => segment.light === 'unknown' && dataset.segmentKnown(segment.id))
+        .sort((a, b) => b.length - a.length).map(segment => segment.id))].slice(0, 3)
+      : [];
+    const question = en
+      ? (stress.flipped
+        ? 'The comparison changes with unmapped lighting. Which assumption should we use?'
+        : 'Some stretches have unmapped lighting. Both assumptions suggest the same route. Which should we use for the review?')
+      : (stress.flipped
+        ? 'การเปรียบเทียบเปลี่ยนตามช่วงที่ไม่มีข้อมูลไฟ ต้องการลองสมมติฐานไหน?'
+        : 'บางช่วงยังไม่มีข้อมูลไฟ ทั้งสองสมมติฐานได้เส้นทางเดียวกัน ต้องการใช้สมมติฐานไหนในการตรวจ?');
+    const clarification = !request.preference && (stress.flipped || missingLighting) ? {
       id: 'night_lighting_preference',
-      text: en ? 'The comparison changes with unmapped lighting. Which assumption should we use?'
-        : 'การเปรียบเทียบเปลี่ยนตามช่วงที่ไม่มีข้อมูลไฟ ต้องการลองสมมติฐานไหน?',
+      text: question,
       options: [
-        { value: 'direct', label: en ? 'Assume unmapped stretches are lit' : 'ลองสมมติว่าช่วงที่ไม่มีข้อมูลมีไฟ', ref: plan.stress.optimisticId },
-        { value: 'prefer_evidence', label: en ? 'Assume unmapped stretches are dark' : 'ลองสมมติว่าช่วงที่ไม่มีข้อมูลไม่มีไฟ', ref: plan.stress.pessimisticId },
+        { value: 'direct', label: en ? 'Assume unmapped stretches are lit' : 'ลองสมมติว่าช่วงที่ไม่มีข้อมูลมีไฟ', ref: stress.flipped ? stress.optimisticId : selected.id },
+        { value: 'prefer_evidence', label: en ? 'Assume unmapped stretches are dark' : 'ลองสมมติว่าช่วงที่ไม่มีข้อมูลไม่มีไฟ', ref: stress.flipped ? stress.pessimisticId : selected.id },
       ],
     } : null;
     return { status: 200, body: {
@@ -111,7 +124,7 @@ export async function handleAgenticPlan(
       datasetVersion: plan.datasetVersion, baseDatasetVersion: dataset.version, mode: plan.mode,
       decision: plan.decision, recommendedId: plan.recommendedId, shortestId: plan.shortestId,
       text: plan.final?.text ?? planText(plan, request.language), clarification,
-      evidenceIds: plan.stress.flipped ? plan.stress.evidenceIds : [],
+      evidenceIds,
       routes: plan.routes.map(({ id, meters, minutes, lit, dark, unknown, shade, sunMinutes }) => ({
         id, meters, minutes, lit, dark, unknown, shade, sunMinutes,
       })),

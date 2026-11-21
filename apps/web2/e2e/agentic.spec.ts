@@ -14,7 +14,7 @@ test('public-place draft and one night clarification preserve the selected map r
   let intentCalls = 0;
   const planCalls: unknown[] = [];
   const cors = {
-    'access-control-allow-origin': 'http://localhost:4175',
+    'access-control-allow-origin': process.env.WALKWE_TEST_APP_ORIGIN ?? 'http://localhost:4175',
     'access-control-allow-headers': 'content-type',
     'access-control-allow-methods': 'POST, OPTIONS',
   };

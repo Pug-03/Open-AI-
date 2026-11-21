@@ -10,6 +10,7 @@ import { RouteWhy } from './RouteWhy.tsx';
 import { RouteEvidence } from './RouteEvidence.tsx';
 import { AgenticReview } from './AgenticTrip.tsx';
 import type { AgenticRequest } from '../../agentic.ts';
+import type { RouteReviewController } from '../../voice/routeReview.ts';
 import { BestTime } from '../BestTime.tsx';
 import { copy } from '../../landingCopy.ts';
 import type { LatLng } from '@walkwe/core';
@@ -52,13 +53,15 @@ interface Props {
   /** Mode being computed, for the loading line. */
   loadingMode: WalkMode;
   meta: DatasetMeta | null;
+  review: RouteReviewController;
+  reviewFirst: boolean;
   /** The trip itself, for the "best time to leave" chart. */
   trip?: { from: LatLng; to: LatLng } | null;
   /** Plan again for a departure picked on that chart. */
   onLeaveAt?: (at: Date) => void;
 }
 
-export function RouteResults({ state, selected, onSelect, onRetry, onStart, onChangeTo, meta, loadingMode, trip, onLeaveAt }: Props) {
+export function RouteResults({ state, selected, onSelect, onRetry, onStart, onChangeTo, meta, loadingMode, trip, onLeaveAt, review, reviewFirst }: Props) {
   const { t, lang } = useI18n();
   const { stepFree } = useAccess();
 
@@ -158,10 +161,12 @@ export function RouteResults({ state, selected, onSelect, onRetry, onStart, onCh
     );
   };
 
+  const reviewPanel = state.agentRequest && <AgenticReview request={{ ...state.agentRequest, language: lang }} review={review} />;
   return (
     <div className="results">
+      {reviewFirst && reviewPanel}
       <ul className="list route-list">{result.routes.map(card)}</ul>
-      {state.agentRequest && <AgenticReview key={JSON.stringify([state.agentRequest, lang])} request={{ ...state.agentRequest, language: lang }} />}
+      {!reviewFirst && reviewPanel}
       {result.routes[selected] && (
         <>
           {(!night || !result.routes[selected]!.evidence?.length) &&

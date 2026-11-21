@@ -10,17 +10,36 @@ const callEvent = z.object({
   }) }),
 });
 
-export function createLiveToolHandler({ screen, signal, actions, send, speak, unavailable }: {
+export function createLiveToolHandler({ screen, signal, actions, send, speak, unavailable, working, settled }: {
   screen: VoiceScreen;
   signal: AbortSignal;
   actions: () => VoiceActions;
   send: (event: object) => void;
   speak: (parts: SpeechPart[], name: VoiceToolName) => Promise<void>;
   unavailable: () => void;
+  working?: (name: VoiceToolName) => void;
+  settled?: () => void;
 }) {
   const calls = new Set<string>();
   const delegations = new Set<string>();
   const allowed = new Set<VoiceToolName>(screenTools[screen]);
+  let busy = false;
+  let pendingContinuation = false;
+
+  function sendResult(callId: string, status: string, parts: SpeechPart[]) {
+    send({ type: 'response.item.create', item: {
+      type: 'function_call_output', call_id: callId,
+      output: JSON.stringify({ status, speak_text: parts.map(({ text }) => text).join(' ') }),
+    } });
+    pendingContinuation = true;
+  }
+
+  function continueResponse() {
+    if (!pendingContinuation || signal.aborted) return;
+    pendingContinuation = false;
+    send({ type: 'response.create' });
+  }
+
   return async (event: unknown) => {
     const parsed = callEvent.safeParse(event);
     if (!parsed.success || signal.aborted) return;
@@ -29,18 +48,32 @@ export function createLiveToolHandler({ screen, signal, actions, send, speak, un
     calls.add(item.call_id);
     const first = !delegations.has(delegation);
     delegations.add(delegation);
-    let args: unknown;
-    try { args = JSON.parse(item.arguments); } catch { /* schema will reject */ }
     const name = isVoiceTool(item.name) && allowed.has(item.name) ? item.name : null;
-    const result = first && name ? await executeVoiceTool(name, args, actions(), signal) : { status: 'unavailable', parts: [] };
-    if (signal.aborted) return;
-    send({ type: 'response.item.create', item: {
-      type: 'function_call_output', call_id: item.call_id,
-      output: JSON.stringify({ status: result.status, speak_text: result.parts.map(({ text }) => text).join(' ') }),
-    } });
-    send({ type: 'response.create' });
-    if (name && result.status === 'ok') await speak(result.parts, name);
-    else if (first) unavailable();
+    if (busy || !first || !name) {
+      sendResult(item.call_id, 'unavailable', []);
+      if (!busy) {
+        continueResponse();
+        if (first) unavailable();
+      }
+      return;
+    }
+
+    busy = true;
+    try {
+      working?.(name);
+      let args: unknown;
+      try { args = JSON.parse(item.arguments); } catch { /* schema will reject */ }
+      const result = await executeVoiceTool(name, args, actions(), signal);
+      if (signal.aborted) return;
+      sendResult(item.call_id, result.status, result.parts);
+      continueResponse();
+      if (result.status === 'ok') await speak(result.parts, name);
+      else unavailable();
+    } finally {
+      busy = false;
+      continueResponse();
+      settled?.();
+    }
   };
 }
 
@@ -62,7 +95,9 @@ async function waitForIce(peer: RTCPeerConnection, signal: AbortSignal) {
   });
 }
 
-export async function runLiveVoice({ proxyUrl, screen, lang, signal, actions, ready, unavailable, speak }: {
+const SESSION_LIMIT_MS = 120_000;
+
+export async function runLiveVoice({ proxyUrl, screen, lang, signal, actions, ready, unavailable, speak, working }: {
   proxyUrl: string;
   screen: VoiceScreen;
   lang: Lang;
@@ -71,6 +106,7 @@ export async function runLiveVoice({ proxyUrl, screen, lang, signal, actions, re
   ready: () => void;
   unavailable: () => void;
   speak: (parts: SpeechPart[], signal: AbortSignal, name: VoiceToolName) => Promise<void>;
+  working?: (name: VoiceToolName) => void;
 }): Promise<void> {
   const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
   let peer: RTCPeerConnection | undefined;
@@ -80,7 +116,7 @@ export async function runLiveVoice({ proxyUrl, screen, lang, signal, actions, re
   const stop = () => microphone.getTracks().forEach((track) => track.stop());
   const life = new AbortController();
   const abort = () => { stop(); life.abort(); };
-  const timeout = setTimeout(abort, 60_000);
+  const timeout = setTimeout(abort, SESSION_LIMIT_MS);
   signal.addEventListener('abort', abort, { once: true });
   try {
     if (signal.aborted) return;
@@ -91,12 +127,14 @@ export async function runLiveVoice({ proxyUrl, screen, lang, signal, actions, re
     const events = peer.createDataChannel('oai-events');
     channel = events;
     const send = (event: object) => { if (events.readyState === 'open') events.send(JSON.stringify(event)); };
-    const handle = createLiveToolHandler({ screen, signal: life.signal, actions, send, unavailable,
-      speak: async (parts, name) => {
+    const handle = createLiveToolHandler({
+      screen, signal: life.signal, actions, send, unavailable,
+      working: name => {
         listening(false);
-        try { await speak(parts, life.signal, name); }
-        finally { if (!life.signal.aborted) listening(true); }
+        working?.(name);
       },
+      speak: (parts, name) => speak(parts, life.signal, name),
+      settled: () => { if (!life.signal.aborted) listening(true); },
     });
     const ended = new Promise<{ failed: boolean }>((resolve) => {
       let closing: ReturnType<typeof setTimeout>;

@@ -2,24 +2,9 @@ import { z } from 'zod';
 import { env } from './env.ts';
 import { LANDMARKS } from './components/plan/landmarks.ts';
 import type { PickedPlace } from './store/plan.ts';
+import { placeId, time, preference, routeRequestSchema, type AgenticRequest } from './agenticRequest.ts';
 
-const placeId = z.string().refine(id => LANDMARKS.some(place => place.id === id));
-const language = z.enum(['th', 'en']);
-const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-const preference = z.enum(['direct', 'prefer_evidence']);
-const routeRequestSchema = z.object({
-  from: placeId,
-  to: placeId,
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time,
-  mode: z.enum(['day', 'night']),
-  language,
-  noStairs: z.boolean(),
-  preference: preference.optional(),
-});
-
-export type AgenticRequest = z.infer<typeof routeRequestSchema>;
-export type RoutePreference = z.infer<typeof preference>;
+export type { AgenticRequest, RoutePreference } from './agenticRequest.ts';
 export const intentResponseSchema = z.object({
   status: z.literal('confirm'),
   from: placeId.nullable(),
