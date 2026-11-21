@@ -1,6 +1,6 @@
 # Walk We · Workflow architecture
 
-The packages were imported from [Sea-x-OpenAI PR #1](https://github.com/Pug-03/Sea-x-OpenAI/pull/1). See the [measured OpenAI live eval](EVAL_2026-11-21.md).
+The packages were imported from [Sea-x-OpenAI PR #1](https://github.com/Pug-03/Sea-x-OpenAI/pull/1). See the [measured OpenAI live eval](EVAL_2026-11-21.md) and [screen designs](UI_DESIGN.md).
 
 ```text
 packages/
