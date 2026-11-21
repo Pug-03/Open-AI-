@@ -51,6 +51,7 @@
 
 /* ---------- Segmented control (time / mode / theme) ---------- */
 .seg {
+  --seg-inner-radius: calc(var(--radius) - var(--hair));
   display: inline-flex;
   border: var(--hair) solid var(--rule);
   border-radius: var(--radius);
@@ -75,6 +76,14 @@
 }
 .seg button + button {
   border-inline-start: var(--hair) solid var(--rule);
+}
+.seg button:first-child {
+  border-start-start-radius: var(--seg-inner-radius);
+  border-end-start-radius: var(--seg-inner-radius);
+}
+.seg button:last-child {
+  border-start-end-radius: var(--seg-inner-radius);
+  border-end-end-radius: var(--seg-inner-radius);
 }
 .seg button[aria-pressed='true'] {
   background: var(--primary-bg);
