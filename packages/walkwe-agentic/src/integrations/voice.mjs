@@ -21,21 +21,3 @@ export function createVoiceTools({ resolveIntent, askTrip, openSosSheet }) {
     },
   };
 }
-
-export async function getSignedVoiceUrl({ apiKey, agentId, fetchImpl = fetch }) {
-  if (!apiKey || !/^agent_[\w-]+$/.test(agentId ?? "")) return { status: "unavailable" };
-  const endpoint = new URL("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url");
-  endpoint.searchParams.set("agent_id", agentId);
-  endpoint.searchParams.set("include_conversation_id", "true");
-  try {
-    const response = await fetchImpl(endpoint, { headers: { "xi-api-key": apiKey }, signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return { status: "unavailable" };
-    const { signed_url: signedUrl } = await response.json();
-    const url = new URL(signedUrl);
-    return url.protocol === "wss:" && url.hostname === "api.elevenlabs.io"
-      ? { status: "ok", signedUrl }
-      : { status: "unavailable" };
-  } catch {
-    return { status: "unavailable" };
-  }
-}

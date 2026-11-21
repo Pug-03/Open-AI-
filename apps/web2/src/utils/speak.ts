@@ -43,19 +43,18 @@ async function remoteUrl(text: string, lang: Lang, signal: AbortSignal): Promise
   if (hit) return hit;
   if (remoteOff) return null;
   try {
-    const path = env.voiceProvider === 'openai' ? '/voice/live/speak' : '/speak';
-    const res = await fetch(`${env.voiceProxyUrl}${path}`, {
+    const res = await fetch(`${env.voiceProxyUrl}/voice/live/speak`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text, lang }),
       credentials: 'omit',
-      signal: AbortSignal.any ? AbortSignal.any([signal, AbortSignal.timeout(env.voiceProvider === 'openai' ? 11_000 : 8_000)]) : signal,
+      signal: AbortSignal.any ? AbortSignal.any([signal, AbortSignal.timeout(11_000)]) : signal,
     });
     if (res.status === 204 || res.status === 503) {
       remoteOff = true; // no voice key on the proxy: use the phone's voice from now on
       return null;
     }
-    if (res.status === 409 && env.voiceProvider === 'openai') return null;
+    if (res.status === 409) return null;
     if (!res.ok) throw new Error(String(res.status));
     const url = URL.createObjectURL(await res.blob());
     audioCache.set(key, url);

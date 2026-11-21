@@ -27,7 +27,7 @@ Bangkok walks are hot at noon and poorly lit at night. Most map apps pick the sh
 - **Safer by night.** Weights each street by lighting, CCTV coverage, night foot traffic (from nearby open shops and points of interest) and recorded incidents. The wording is always "safer (based on available data)". The app never promises safety, and a unit test fails if a bare "safe" appears in the UI.
 - **Three routes per trip.** Shadiest or safest, balanced (at most 1.25× the shortest), and shortest as the baseline. Routes that are not meaningfully different are merged into one card.
 - **Turn-by-turn on the phone.** Works in airplane mode and resumes on the same step after a reload. Photo guides replace plain steps where a hand-made guide exists.
-- **Voice.** Dictate a place with the browser microphone, and hear instructions in the browser voice or optional ElevenLabs (Thai and English).
+- **Voice.** Dictate a place with the browser microphone, and hear instructions in the browser voice or OpenAI speech, and speak to GPT-Live in Thai and English.
 - **Accessibility.** Step-free routing, larger text, vibration on each step, read-aloud, and 48 px touch targets. axe-core WCAG 2.1 AA scans run in the Playwright E2E tests in day and night themes.
 - **SOS.** Hold for 1 second, then a 5 second countdown shares your location by SMS or LINE. Contacts stay on the device.
 - **Private by design.** No accounts and no analytics. Location is never logged, and the error reporter strips coordinates.
@@ -49,8 +49,8 @@ flowchart LR
       SW[Service worker<br/>Workbox precache] -.offline.-> UI
     end
 
-    UI -->|optional /speak| PROXY[Cloudflare Worker<br/>rate-limited proxy]
-    PROXY --> EL[ElevenLabs TTS]
+    UI -->|optional voice and Agentic requests| PROXY[Cloudflare Worker<br/>rate-limited proxy]
+    PROXY --> OPENAI[OpenAI voice and Agentic models]
 ```
 
 **One route request, step by step**
@@ -109,7 +109,7 @@ More detail, including how to scale to the whole city and add another city, is i
 | Offline | vite-plugin-pwa, Workbox | Precaches the shell, dataset (about 8.2 MB raw, 1.3 MB gzip), guides and incidents. Navigation also prefetches photos, map styles, glyphs and tiles along the route |
 | Geocoding | Photon (komoot) behind an adapter | Swappable without UI changes |
 | Weather | Open-Meteo cloud cover | Free and keyless. Cloud cover scales the sun penalty |
-| Speech | Web Speech API, optional ElevenLabs through a Cloudflare Worker | Browser voice by default, hosted voice if configured |
+| Speech | Web Speech API, GPT-Live and OpenAI Realtime through a Cloudflare Worker | Browser voice fallback and hosted voice on the configured origin |
 | Edge | Cloudflare Workers (static assets and proxy), Workers Rate Limiting | Per-client and global limits, origin and Fetch Metadata checks, request text kept out of logs |
 | Security | Strict CSP with a hashed inline script, HSTS, `frame-ancestors 'none'`, Permissions-Policy | Header test checks the hash against `index.html` |
 | Test | Vitest, Playwright, axe-core, Lighthouse | See below |
@@ -171,20 +171,13 @@ the `OPENAI_API_KEY` Worker secret and both existing rate limit bindings.
 Requests contain candidate numbers, categories and distances. Map evidence
 remains available when the proxy or OpenAI is unavailable.
 
-### Optional hosted speech
+### Optional hosted voice and research
 
-The browser reads instructions aloud with its built-in voice. To use ElevenLabs:
+Set `OPENAI_API_KEY` as a Worker secret. Set `ALLOWED_ORIGINS`, `OPENAI_LIVE_ORIGIN` and `OPENAI_AGENTIC_ORIGIN` to the approved Web2 origin. Set `WALKWE_DATA_ORIGIN` to the deployment that serves its graph files. The Wrangler configuration binds the rate limiters and evidence queue. See the [architecture and service settings](docs/agentic/ARCHITECTURE.md).
 
-```bash
-cd apps/ai-proxy
-npx wrangler secret put ELEVENLABS_API_KEY
-# Set ALLOWED_ORIGINS in wrangler.toml to the web app's exact origin.
-npm run deploy
-```
+Build with `VITE_AI_PROXY_URL=<worker url> npm run build`. For local development, set the origins and key in `apps/ai-proxy/.dev.vars`, set `WALKWE_DATA_ORIGIN=http://localhost:5174` and run `npm run ai:dev` alongside `VITE_AI_PROXY_URL=http://localhost:8788 npm run dev -- --port 5174`.
 
-Build from the project root with `VITE_AI_PROXY_URL=<worker url> npm run build`, then deploy the static site with `npm exec --workspace @walkwe/web2 -- wrangler deploy`.
-
-For local speech development, put `ALLOWED_ORIGINS="http://localhost:5174"` and `ELEVENLABS_API_KEY` in `apps/ai-proxy/.dev.vars`. Run `npm run ai:dev` and `VITE_AI_PROXY_URL=http://localhost:8788 npm run dev` in separate terminals.
+The browser voice reads directions if hosted speech is unavailable. In night route results, choose a named segment with missing lighting data to look up public sources. Results wait for a reviewer in the evidence queue.
 
 ### Configuration
 

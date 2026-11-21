@@ -1,4 +1,4 @@
-# Walk We speech proxy. Set ELEVENLABS_API_KEY as a Worker secret to enable it.
+# Walk We OpenAI and Agentic proxy. Keep OPENAI_API_KEY in a Worker secret.
 name = "walkwe-ai-proxy-v2"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"

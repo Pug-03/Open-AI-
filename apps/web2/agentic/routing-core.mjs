@@ -6,7 +6,7 @@ import { decideCandidates } from "../../../packages/walkwe-agentic/src/routing/c
 import { agentConfig } from "../../../packages/walkwe-agentic/src/config.mjs";
 import { evidenceAge } from "../../../packages/walkwe-agentic/src/agentic-workflow/context.mjs";
 import { LANDMARKS } from "../src/components/plan/landmarks.ts";
-import { createPilotRouter } from "../src/routing/pilotRouter.ts";
+import { createPilotRouter, pilotSnapshotInput } from "../src/routing/pilotRouter.ts";
 
 const day = /^\d{4}-\d{2}-\d{2}$/;
 const clock = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -69,7 +69,7 @@ export function createWeb2Routing(areaJson, incidentsJson) {
   const area = areaDatasetSchema.parse(areaJson);
   const incidents = withoutPlaceholders(incidentsDatasetSchema.parse(incidentsJson));
   const router = createPilotRouter(area, incidents);
-  const version = `web2:${revision(JSON.stringify([area, incidents]))}`;
+  const version = `web2:${revision(pilotSnapshotInput(area, incidents))}`;
   const referenceDate = area.updatedAt.slice(0, 10);
 
   function route(request) {

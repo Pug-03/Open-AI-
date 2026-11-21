@@ -8,10 +8,10 @@ The microphone fills the place search field using the browser's Web Speech API. 
 
 ## Reading directions aloud
 
-The browser can read localized instructions and arrival messages aloud. Sites that configure the optional ElevenLabs Worker send up to 300 characters of the text to be read and its language to `POST /speak`. The Worker returns MP3 audio, which the app caches in memory for the session. The browser voice is used when hosted speech is unavailable. The SOS countdown uses the browser voice.
+The browser can read localized instructions and arrival messages aloud. When the OpenAI Worker is configured, the app sends up to 300 characters and the language to `POST /voice/live/speak`. The Worker returns audio only if its transcript matches the requested text. The browser voice is the fallback and reads the SOS countdown.
 
-The ElevenLabs key lives in the Worker secret `ELEVENLABS_API_KEY`. The Worker checks the site's origin, limits requests and leaves request text out of its logs. See [README](README.md#optional-hosted-speech) for configuration.
+## Talking to Walk We and researching lighting
 
-## Spend protection
+When a walker starts a voice session, the browser connects to GPT-Live over WebRTC. The voice tools use the active screen and the app's verified trip information. The worker keeps the key and applies origin and rate limits. See the [voice and research setup](README.md#optional-hosted-voice-and-research).
 
-The Worker's origin and Fetch Metadata checks only stop browsers on other sites. A script that runs outside a browser can fake those headers, so the real limits are the rate limits in `apps/ai-proxy/wrangler.toml` (20 requests per minute per client, 120 per minute overall), the prepaid ElevenLabs credit, and the spend limit set in the ElevenLabs console. Keep a spend limit set there.
+A separate control on night route results sends the selected public segment ID and graph version to the proxy. The proxy resolves the street name from the public graph. Research results wait for human review before any reuse as evidence.

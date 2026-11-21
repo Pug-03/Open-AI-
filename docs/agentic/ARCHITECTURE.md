@@ -10,7 +10,7 @@ packages/
         harness/         Tool registry, budget, verification and replay
       routing/          Fixture graph and deterministic route metrics
       evidence/         Steward, news and human approval rules
-      integrations/     Responses client, ElevenLabs tools and MCP
+      integrations/     Responses client, voice tools and MCP
       workers/          Node preview and local Workers /agent/step
     evals/              Test cases, offline/mock reports and opt-in live runner
   verify/               Code checks for a draft against the route and evidence
@@ -29,9 +29,9 @@ Planner can call `get_trip_snapshot` to read route metrics, stress results, and 
 | --- | --- |
 | Companion | Web2 checks the active step for closures, a transition to night, and incomplete lighting coverage. At most two notices are shown per trip. The proxy can also accept a rain event from a trusted app integration. |
 | SOS | The user confirms delivery after the countdown. The authenticated outbox deduplicates the alert and distinguishes provider acceptance from recipient acknowledgement. The manual and rehearsal flows work independently. |
-| Voice | The browser opens an opt-in GPT‑Live session with tools bound to the active screen from a catalog of 16. For navigation and route review, the app supplies the checked wording and figures and only plays matching OpenAI speech. ElevenLabs read-aloud and device speech remain available. |
+| Voice | The browser opens an opt-in GPT‑Live session with tools bound to the active screen from a catalog of 16. For navigation and route review, the app supplies the checked wording and figures and only plays matching OpenAI speech. Device speech is available when hosted audio is unavailable. |
 | Steward and news | Authenticated service requests queue lighting, photo, and news drafts. An authorized reviewer can approve or reject a draft. An approval records an audit entry and a new version. |
-| Research | Authorized services can start or reuse a research job for a public segment and poll the source count. Results enter `pending_review`. Connecting the browser requires an authenticated app session. |
+| Research | The night route evidence panel submits a selected public segment and its graph fingerprint. A browser capability scopes job polling. Results enter `pending_review`. Service callers can still use their own authenticated identity. |
 | MCP | Read-only tools return evidence, replay and departure comparisons from the selected fixture or the versioned public Web2 graph. |
 
 ## Deployment and integration status
@@ -60,7 +60,7 @@ For the hosted Worker and Web2 build, set these only in the relevant environment
 | --- | --- |
 | `VITE_AI_PROXY_URL`, `ALLOWED_ORIGINS`, `WALKWE_DATA_ORIGIN` | Pair the browser and proxy. Override the default trusted Web2 graph host for local or staging. |
 | `OPENAI_API_KEY`, `OPENAI_AGENTIC_ORIGIN` | Enable paid route workflows for a controlled app origin. Both general rate limiters and `AGENTIC_MODEL_LIMITER` must permit the call. Route review and parsing can use local rules when paid calls are unavailable. |
-| `VITE_VOICE_PROVIDER=openai`, `OPENAI_LIVE_ORIGIN`, `OPENAI_API_KEY` | Enable GPT‑Live on a controlled origin. For public production, use authenticated access before enabling paid sessions. [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=live) |
+| `VITE_AI_PROXY_URL`, `OPENAI_LIVE_ORIGIN`, `OPENAI_API_KEY` | Enable GPT‑Live on a controlled origin. For public production, use authenticated access before enabling paid sessions. [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=live) |
 | `EVIDENCE_REVIEWER_TOKENS`, `EVIDENCE_INGEST_TOKENS` | Configure separate server-only identities for ingestion and approval. See [evidence and research setup](../../packages/voice-research/README.md). |
 | `VITE_SOS_PROXY_URL`, `SOS_DIRECTORY`, `SOS_TRANSPORT` | Configure the signed-in SOS relay. The directory resolves the session cookie and confirmed recipients at `/session`. The transport sends to the verified destination at `/send` and can link to `/sos/receipt?id=<alertId>`. Run a staging end-to-end test with an enrolled recipient before enabling the feature. |
 

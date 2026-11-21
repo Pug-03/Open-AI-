@@ -56,7 +56,7 @@ export function LiveVoice({ screen, actions, routeReady, awaitingReviewChoice }:
   };
   useEffect(() => () => run.current?.abort(), []);
 
-  if (env.voiceProvider !== 'openai' || !env.voiceProxyUrl || !navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) return null;
+  if (!env.voiceProxyUrl || !navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) return null;
   const proxyUrl = env.voiceProxyUrl;
   const isActive = status !== 'idle' && status !== 'failed';
   const isWorking = status === 'drafting' || status === 'routing' || status === 'reviewing' || status === 'working';

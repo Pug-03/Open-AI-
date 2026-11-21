@@ -1,14 +1,14 @@
 # Walk We voice research
 
-`research_segment` uses the segment selected in the app. The client acknowledges an accepted job, polls the proxy, and announces a count from the proxy when the draft is ready. `announce` should use the app's speech path, such as its Web Speech fallback. ElevenLabs `sendContextualUpdate` does not start a spoken turn.
+`research_segment` uses the segment selected in the app. The night route evidence panel acknowledges the job, polls the proxy, and shows the source count when a draft is ready.
 
-The Web2 proxy mounts two authenticated service routes. `POST /agents/research` accepts `segmentId` and the exact `datasetVersion` of the public routing graph. `GET /agents/research/:id` exposes status and the source count to the identity that claimed the job. The Worker resolves the edge against the graph and sends only the public street name and city to OpenAI. Edges without a public street name or from a different graph version are rejected.
+The Web2 proxy mounts two research routes. `POST /agents/research` accepts `segmentId` and the exact `datasetVersion` of the public routing graph. `GET /agents/research/:id` exposes status and the source count to the identity that claimed the job. The Worker resolves the edge against the graph and sends only the public street name and city to OpenAI. Edges without a public street name or from a different graph version are rejected.
 
 `src/store.mjs` implements job claims and a cache by graph version, segment and street name. It reuses a completed result for 24 hours and expires pending jobs after five minutes. The hosted adapter adds the `pending_review` draft to the evidence queue in the same storage transaction as the job result. The status request collects research results, so the client must poll before a pending job expires.
 
 ## Evidence review service
 
-Set `EVIDENCE_INGEST_TOKENS` and `EVIDENCE_REVIEWER_TOKENS` as Worker secrets. Each is a JSON object mapping identities to unique, randomly generated base64url tokens of at least 32 characters. Clients call the service with the identity's bearer token. Keep these tokens in an authenticated backend or use them from a trusted operator client. The public PWA still needs authenticated session integration before it can call these routes safely.
+Set `EVIDENCE_INGEST_TOKENS` and `EVIDENCE_REVIEWER_TOKENS` as Worker secrets. Each is a JSON object mapping identities to unique, randomly generated base64url tokens of at least 32 characters. Clients call the service with the identity's bearer token. Keep these tokens in an authenticated backend or use them from a trusted operator client. Web2 research is enabled on `OPENAI_AGENTIC_ORIGIN` with an OpenAI key and rate limits. The browser uses an in-memory capability for research starts and polls. Evidence submission and review still require service identities.
 
 | Endpoint | Access and behavior |
 | --- | --- |

@@ -171,7 +171,7 @@ export function RouteResults({ state, selected, onSelect, onRetry, onStart, onCh
         <>
           {(!night || !result.routes[selected]!.evidence?.length) &&
             <RouteWhy route={result.routes[selected]!} shortest={shortest} mode={mode} />}
-          <RouteEvidence key={selected} route={result.routes[selected]!} shortest={shortest} mode={mode} />
+          <RouteEvidence key={selected} route={result.routes[selected]!} shortest={shortest} mode={mode} datasetVersion={result.datasetVersion} />
         </>
       )}
       {/* Pinned to the sheet's foot on phones: the main action never hides below the fold. */}

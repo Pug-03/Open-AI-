@@ -92,7 +92,7 @@ async function mockVoice(page: Page, context: BrowserContext, screen: 'plan' | '
 }
 
 test('GPT-Live repeats verified navigation steps and opens SOS without sending', async ({ page, context }) => {
-  test.skip(!proxy || process.env.VITE_VOICE_PROVIDER !== 'openai', 'Build with GPT-Live and a mocked proxy origin.');
+  test.skip(!proxy, 'Build with a mocked GPT-Live proxy origin.');
   await asReturningUser(page, { ww_lang: 'th' });
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation(SIAM);
@@ -138,7 +138,7 @@ test('GPT-Live repeats verified navigation steps and opens SOS without sending',
 });
 
 test('one GPT-Live session plans a walk, asks about lighting, and reads the checked answer', async ({ page, context }, testInfo) => {
-  test.skip(!proxy || process.env.VITE_VOICE_PROVIDER !== 'openai', 'Build with GPT-Live and a mocked proxy origin.');
+  test.skip(!proxy, 'Build with a mocked GPT-Live proxy origin.');
   await asReturningUser(page, { ww_lang: 'th' });
   await page.clock.install({ time: new Date('2026-11-21T14:00:00+07:00') });
   await page.clock.resume();

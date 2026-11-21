@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { rankEvidence } from './route-evidence';
 import { handleAgenticCompanion, handleAgenticIntent, handleAgenticPlan, type AgenticProgress } from './agentic-plan';
-import { handleEvidence, isEvidencePath, type EvidenceEnv } from './evidence';
+import { handleBrowserResearch, handleEvidence, isEvidencePath, isResearchPath, type EvidenceEnv } from './evidence';
 import { createLiveSession, liveOffer, speakWithOpenAI } from './live';
 import { handleSos, type SosBindings } from './sos';
 
@@ -19,11 +19,6 @@ export interface Env extends EvidenceEnv, SosBindings {
   GLOBAL_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
   /** Dedicated budget for the paid Agentic loop, which may call a model several times per request. */
   AGENTIC_MODEL_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
-  /** ElevenLabs key for /speak (wrangler secret). Without it /speak answers 204 and the app uses the phone's voice. */
-  ELEVENLABS_API_KEY?: string;
-  /** ElevenLabs voice and model (wrangler.toml [vars]); both speak Thai and English. */
-  ELEVENLABS_VOICE_ID?: string;
-  ELEVENLABS_MODEL?: string;
   OPENAI_LIVE_ORIGIN?: string;
   OPENAI_AGENTIC_ORIGIN?: string;
 }
@@ -33,23 +28,6 @@ const speakSchema = z.strictObject({
   text: z.string().trim().min(1).max(300),
   lang: z.enum(['th', 'en']),
 });
-
-/** Text to speech through ElevenLabs; returns the MP3 as the response body. */
-async function speak(env: Env, body: unknown, cors: HeadersInit): Promise<Response> {
-  // No voice key: 204 tells the app to use the phone's own voice (not an error).
-  if (!env.ELEVENLABS_API_KEY) return new Response(null, { status: 204, headers: { 'x-tts': 'off', ...cors } });
-  const { text, lang } = speakSchema.parse(body);
-  const voice = env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb';
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_22050_32`, {
-    method: 'POST',
-    headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: env.ELEVENLABS_MODEL || 'eleven_flash_v2_5', language_code: lang }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (res.status === 429) return json({ error: 'rate_limited' }, 429, cors);
-  if (!res.ok) return json({ error: 'upstream' }, 502, cors);
-  return new Response(res.body, { status: 200, headers: { 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=86400', ...cors } });
-}
 
 const MAX_BODY_BYTES = 4_096;
 const agenticHandlers = new Map<string, (body: unknown, env: Env, signal: AbortSignal) =>
@@ -89,8 +67,7 @@ function streamPlan(body: unknown, env: Env, signal: AbortSignal, noStore: Heade
   return new Response(stream, { headers });
 }
 
-function corsFor(req: Request, env: Env): HeadersInit | null {
-  const origin = req.headers.get('origin') ?? '';
+function corsFor(req: Request, env: Env, origin = req.headers.get('origin') ?? ''): HeadersInit | null {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
   if (!allowed.includes(origin)) return null;
   // Browsers always send Fetch Metadata on these calls; requiring it turns away
@@ -116,31 +93,55 @@ async function readJson(req: Request, maximum = MAX_BODY_BYTES): Promise<unknown
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
-    const path = new URL(req.url).pathname;
-    if (isEvidencePath(path)) return handleEvidence(req, env);
-    const originHeaders = corsFor(req, env);
+    const url = new URL(req.url);
+    const path = url.pathname;
+    const browserResearch = isResearchPath(path) && (req.headers.has('origin') || req.headers.has('x-walkwe-research-session'));
+    if (isEvidencePath(path) && !browserResearch) return handleEvidence(req, env);
+    const origin = req.headers.get('origin') ?? (browserResearch && req.headers.get('sec-fetch-site') === 'same-origin' ? url.origin : '');
+    const originHeaders = corsFor(req, env, origin);
     if (!originHeaders) return new Response('forbidden', { status: 403 });
-    const cors = path === '/sos' ? { ...originHeaders, 'access-control-allow-credentials': 'true' } : originHeaders;
+    const cors = {
+      ...originHeaders,
+      ...(path === '/sos' ? { 'access-control-allow-credentials': 'true' } : {}),
+      ...(browserResearch ? {
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-allow-headers': 'content-type, x-walkwe-research-session',
+      } : {}),
+    };
     const agenticHandler = agenticHandlers.get(path);
-    if (!agenticHandler && !['/speak', '/route-evidence', '/voice/live', '/voice/live/speak', '/sos'].includes(path)) {
+    if (!browserResearch && !agenticHandler && !['/speak', '/route-evidence', '/voice/live', '/voice/live/speak', '/sos'].includes(path)) {
       return json({ error: 'not_found' }, 404, cors);
     }
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
+    const method = browserResearch && path !== '/agents/research' ? 'GET' : 'POST';
+    if (req.method !== method) return json({ error: 'method' }, 405, cors);
     if (path === '/route-evidence' && (!env.OPENAI_API_KEY || !env.RATE_LIMITER || !env.GLOBAL_LIMITER)) {
       return json({ error: 'unavailable' }, 503, cors);
     }
 
     const noStore = { ...cors, 'cache-control': 'no-store' };
+    if (browserResearch && (!env.OPENAI_API_KEY || !env.RATE_LIMITER || !env.GLOBAL_LIMITER
+      || !env.AGENTIC_MODEL_LIMITER || origin !== env.OPENAI_AGENTIC_ORIGIN)) {
+      return json({ status: 'unavailable' }, 503, noStore);
+    }
     // The paid endpoints require both limiter bindings before they call a model.
     if (env.RATE_LIMITER) {
       const who = req.headers.get('cf-connecting-ip') ?? 'unknown';
-      const scope = path === '/sos' ? 'sos' : 'app';
+      const scope = browserResearch ? 'research' : path === '/sos' ? 'sos' : 'app';
       const [mine, all] = await Promise.all([
         env.RATE_LIMITER.limit({ key: `${scope}:ip:${who}` }),
         env.GLOBAL_LIMITER ? env.GLOBAL_LIMITER.limit({ key: `${scope}:all` }) : Promise.resolve({ success: true }),
       ]);
       if (!mine.success || !all.success) return json({ error: 'rate_limited' }, 429, noStore);
+    }
+
+    if (browserResearch) {
+      if (method === 'POST' && !(await env.AGENTIC_MODEL_LIMITER!.limit({ key: 'research' })
+        .catch(() => ({ success: false }))).success) return json({ status: 'rate_limited' }, 429, noStore);
+      const response = await handleBrowserResearch(req, env);
+      const headers = new Headers(response.headers);
+      new Headers(noStore).forEach((value, name) => headers.set(name, value));
+      return new Response(response.body, { status: response.status, headers });
     }
 
     if (path === '/sos') return handleSos(req, env, noStore);
@@ -158,7 +159,7 @@ export default {
       return json(result.body, result.status, noStore);
     }
 
-    if (path === '/voice/live' || path === '/voice/live/speak') {
+    if (path === '/voice/live' || path === '/voice/live/speak' || path === '/speak') {
       const key = env.OPENAI_API_KEY;
       if (!key || !env.RATE_LIMITER || !env.GLOBAL_LIMITER || req.headers.get('origin') !== env.OPENAI_LIVE_ORIGIN) {
         return json({ error: 'unavailable' }, 503, noStore);
@@ -180,11 +181,8 @@ export default {
 
     try {
       const body = await readJson(req);
-      if (path === '/route-evidence') {
-        const result = await rankEvidence(body, env.OPENAI_API_KEY!);
-        return json(result.body, result.status, noStore);
-      }
-      return await speak(env, body, cors);
+      const result = await rankEvidence(body, env.OPENAI_API_KEY!);
+      return json(result.body, result.status, noStore);
     } catch {
       return json({ error: 'bad_request' }, 400, cors);
     }

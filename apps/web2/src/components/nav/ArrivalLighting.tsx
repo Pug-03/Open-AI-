@@ -14,7 +14,7 @@ export function ArrivalLighting({ id }: { id: string }) {
   const saved = readJson(storage, KEY) as { id?: string } | null;
   const answered = useRef(saved?.id === id);
   const [done, setDone] = useState(answered.current);
-  if (env.voiceProvider !== 'openai') return null;
+  if (!env.voiceProxyUrl) return null;
   const record = (answer: Answer) => {
     if (answered.current) return false;
     writeJson(storage, KEY, { id, answer });

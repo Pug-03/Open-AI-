@@ -27,6 +27,7 @@ const token = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/);
 const reviewPaths = new Set(['/evidence/pending', '/evidence/decision', '/evidence/audit']);
 const ingestPaths = new Set(['/evidence/lighting', '/evidence/news', '/evidence/photo']);
 const researchPath = /^\/agents\/research(?:\/[0-9a-f-]{36})?$/;
+export const isResearchPath = (path: string) => researchPath.test(path);
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 const encoder = new TextEncoder();
 const validityMs = 90 * 24 * 60 * 60_000;
@@ -70,7 +71,7 @@ function stub(env: EvidenceEnv) {
 }
 
 export function isEvidencePath(path: string) {
-  return reviewPaths.has(path) || ingestPaths.has(path) || path === '/evidence/approved' || researchPath.test(path);
+  return reviewPaths.has(path) || ingestPaths.has(path) || path === '/evidence/approved' || isResearchPath(path);
 }
 
 async function authenticate(value: string | null, source?: string) {
@@ -113,6 +114,25 @@ export async function handleEvidence(request: Request, env: EvidenceEnv): Promis
     return await destination.fetch(new Request(request, { headers }));
   } catch {
     return json({ error: 'unavailable' }, 503);
+  }
+}
+
+/** A browser capability grants access only to jobs claimed with that capability. */
+export async function handleBrowserResearch(request: Request, env: EvidenceEnv): Promise<Response> {
+  const capability = z.string().uuid().safeParse(request.headers.get('x-walkwe-research-session'));
+  if (!capability.success) return json({ status: 'unauthorized' }, 401);
+  const destination = stub(env);
+  if (!destination) return json({ status: 'unavailable' }, 503);
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', encoder.encode(capability.data));
+    const owner = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    const headers = new Headers({
+      'content-type': request.headers.get('content-type') ?? '',
+      'x-walkwe-evidence-actor': `browser:${owner}`,
+    });
+    return await destination.fetch(new Request(request, { headers }));
+  } catch {
+    return json({ status: 'unavailable' }, 503);
   }
 }
 
@@ -168,13 +188,14 @@ export class EvidenceQueue {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const { pathname: path } = url;
-    const actor = /^(reviewer|ingest):([a-z0-9][a-z0-9_.-]{0,63})$/i.exec(request.headers.get('x-walkwe-evidence-actor') ?? '');
+    const actor = /^(reviewer|ingest|browser):([a-z0-9][a-z0-9_.-]{0,63})$/i.exec(request.headers.get('x-walkwe-evidence-actor') ?? '');
     try {
       if (url.hostname === 'evidence.internal' && path === '/lighting-overlay' && request.method === 'POST') {
         return await this.overlay(overlaySchema.parse(await readBody(request)));
       }
       if (!actor || (reviewPaths.has(path) && actor[1] !== 'reviewer')) return json({ error: 'unauthorized' }, 401);
-      if (researchPath.test(path)) return await this.research(request, actor[0]);
+      if (isResearchPath(path)) return await this.research(request, actor[0]);
+      if (actor[1] === 'browser') return json({ error: 'unauthorized' }, 401);
       if (request.method === 'GET') {
         if (path === '/evidence/pending') return await this.list(url, 'pending:');
         if (path === '/evidence/audit') return await this.list(url, 'audit:');

@@ -91,4 +91,6 @@ it('releases OpenAI audio only when the response transcript matches the requeste
   const bytes = await verified.arrayBuffer();
   expect(new DataView(bytes).getUint32(24, true)).toBe(24_000);
   expect(bytes.byteLength).toBe(48);
+  expect((await worker.fetch(post('/speak', { text: 'Walk 10 metres', lang: 'en' }), env))
+    .headers.get('content-type')).toBe('audio/wav');
 });

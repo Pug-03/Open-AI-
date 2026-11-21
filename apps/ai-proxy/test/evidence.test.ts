@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import worker from '../src/index.ts';
 import { EvidenceQueue, handleEvidence, readApprovedLighting } from '../src/evidence.ts';
 
 const setup = vi.hoisted(() => ({
@@ -180,4 +181,48 @@ it('binds research to the current public named edge and its caller before it ent
   const listed = await (await call('/evidence/pending', reviewer)).json();
   expect(listed.records).toMatchObject([{ id, segmentId: 'edge:42', datasetVersion: setup.version, kind: 'web_research' }]);
   expect(JSON.stringify(listed)).not.toContain('provider-id');
+});
+
+it('allows the app to research a named edge and scopes polling to its browser capability', async () => {
+  setup.agents.start.mockResolvedValue('browser-provider');
+  setup.agents.poll.mockResolvedValue({ status: 'complete', sources: [{ url: 'https://example.test/lighting', note: 'Public record' }] });
+  const { call, env, tasks } = queue({ OPENAI_API_KEY: 'mock-only' });
+  const origin = 'https://app.test';
+  const own = crypto.randomUUID();
+  const other = crypto.randomUUID();
+  const ok = { limit: vi.fn(async () => ({ success: true })) };
+  const config = {
+    ...env, ALLOWED_ORIGINS: origin, OPENAI_AGENTIC_ORIGIN: origin,
+    RATE_LIMITER: ok, GLOBAL_LIMITER: ok, AGENTIC_MODEL_LIMITER: ok,
+  };
+  const input = { segmentId: 'edge:42', datasetVersion: setup.version };
+  const request = (path: string, method: string, capability?: string, body?: object, from = origin) =>
+    worker.fetch(new Request(`https://proxy.test${path}`, {
+      method,
+      headers: {
+        origin: from, 'sec-fetch-mode': 'cors', 'sec-fetch-site': 'cross-site', 'content-type': 'application/json',
+        ...(capability ? { 'x-walkwe-research-session': capability } : {}),
+      },
+      body: body && JSON.stringify(body),
+    }), config);
+  const path = '/agents/research';
+  expect((await request(path, 'OPTIONS')).headers.get('access-control-allow-methods')).toContain('GET');
+  expect((await request(path, 'POST', own, input, 'https://different.test')).status).toBe(403);
+  expect((await request(path, 'POST', undefined, input)).status).toBe(401);
+  expect((await request(path, 'POST', own, { ...input, datasetVersion: 'web2:aaaaaaaaaaaaaaaaaaaaaaaa' })).status).toBe(404);
+  expect(setup.agents.start).not.toHaveBeenCalled();
+  const started = await request(path, 'POST', own, input);
+  expect(started.status).toBe(202);
+  expect(started.headers.get('access-control-allow-origin')).toBe(origin);
+  const { id } = await started.json();
+  await Promise.all(tasks);
+  expect(setup.agents.start).toHaveBeenCalledWith('ถนนพระรามที่ 1, Bangkok, Thailand');
+  expect((await request(`${path}/${id}`, 'GET', other)).status).toBe(404);
+  expect((await request('/evidence/pending', 'GET', own)).status).toBe(401);
+  const result = await request(`${path}/${id}`, 'GET', own);
+  expect(await result.json()).toMatchObject({ id, status: 'pending_review', sourceCount: 1 });
+  expect(await (await call('/evidence/pending', reviewer)).json()).toMatchObject({
+    records: [{ id, segmentId: input.segmentId, datasetVersion: input.datasetVersion, kind: 'web_research' }],
+  });
+  expect(ok.limit).toHaveBeenCalledWith({ key: 'research' });
 });
