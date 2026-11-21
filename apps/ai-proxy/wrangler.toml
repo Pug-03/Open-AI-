@@ -21,6 +21,23 @@ name = "GLOBAL_LIMITER"
 namespace_id = "2002"
 simple = { limit = 120, period = 60 }
 
+[[ratelimits]]
+name = "AGENTIC_MODEL_LIMITER"
+namespace_id = "2003"
+simple = { limit = 12, period = 60 }
+
+[[durable_objects.bindings]]
+name = "EVIDENCE_QUEUE"
+class_name = "EvidenceQueue"
+
+[[durable_objects.bindings]]
+name = "SOS_OUTBOX"
+class_name = "SosOutbox"
+
+[[migrations]]
+tag = "agentic-v1"
+new_sqlite_classes = ["EvidenceQueue", "SosOutbox"]
+
 # Keep request text out of Worker logs.
 [observability]
 enabled = false

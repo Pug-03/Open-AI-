@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { createWorkflows } from "../../../packages/walkwe-agentic/src/agentic-workflow/agents.mjs";
+import { applyApprovedLighting } from "./routing-core.mjs";
 import { loadWeb2Routing } from "./routing.mjs";
 
 const { version, evidence, referenceDate, workflowOptions } = await loadWeb2Routing();
@@ -28,6 +29,21 @@ test("real web2 landmarks lead to the same public graph used by the app Worker",
   assert.equal(workflowOptions.route({ ...request, arriveBy: "21:01" }).status, "no_path");
   const daylight = workflowOptions.route({ ...request, time: "13:00", mode: "day" });
   assert.ok(daylight.routes.some(candidate => candidate.segments.some(segment => typeof segment.shaded === "number")));
+});
+
+test("only fresh approved public-edge lighting changes the versioned routing snapshot", () => {
+  const base = workflowOptions.route(request);
+  const unknown = base.routes.flatMap(route => route.segments)
+    .find(segment => segment.id.startsWith("edge:") && segment.light === "unknown");
+  const overlay = new Map([[unknown.id, { value: "lit", observedAt: referenceDate }]]);
+  const result = applyApprovedLighting(base, overlay);
+  assert.notEqual(result.datasetVersion, version);
+  const updated = result.routes.flatMap(route => route.segments).filter(segment => segment.id === unknown.id);
+  assert.ok(updated.length > 0);
+  assert.ok(updated.every(segment => segment.light === "lit" && segment.trust === "approved"
+    && segment.datasetVersion === result.datasetVersion));
+  assert.equal(applyApprovedLighting(base, new Map([[unknown.id, { value: "lit", observedAt: "2000-01-01" }]])), base);
+  assert.equal(applyApprovedLighting(base, new Map([[unknown.id, { value: "dim", observedAt: referenceDate }]])), base);
 });
 
 test("MCP advertises the real dataset and all three read-only tools work over stdio", () => {

@@ -5,11 +5,13 @@
   "type": "module",
   "description": "Routing, shadow and scoring logic. Must run in Node: no DOM or UI dependencies.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./voice": "./src/voice.ts"
   },
   "dependencies": {
     "@walkwe/config": "*",
-    "suncalc": "^1.9.0"
+    "suncalc": "^1.9.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@turf/turf": "^7.4.0",

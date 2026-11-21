@@ -6,10 +6,14 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useGo } from '../utils/transition.ts';
 import { haversineMeters, type LatLng, type RouteStep } from '@walkwe/core';
+import { speechParts, type VoiceActions } from '@walkwe/core/voice';
 import type { PhotoManifest } from '@walkwe/data';
 import { LazyMapView } from '../components/MapView.lazy.ts';
 import { MapBoundary } from '../components/MapBoundary.tsx';
 import { InstallPrompt } from '../components/nav/InstallPrompt.tsx';
+import { ArrivalLighting } from '../components/nav/ArrivalLighting.tsx';
+import { TripCompanion } from '../components/nav/TripCompanion.tsx';
+import { LiveVoice } from '../components/LiveVoice.tsx';
 import { StepCarousel } from '../components/nav/StepCarousel.tsx';
 import { PhotoViewer, StepPhoto } from '../components/nav/StepPhoto.tsx';
 import { WalkSummary } from '../components/nav/WalkSummary.tsx';
@@ -30,6 +34,7 @@ import { speak, stopSpeaking } from '../utils/speak.ts';
 import { activeCity } from '@walkwe/config';
 import { formatDistance } from '../utils/format.ts';
 import { useDesktop } from '../utils/useDesktop.ts';
+import { verifiedRouteSummary } from '../voice/route.ts';
 
 const ICON: Record<RouteStep['maneuver'], typeof ArrowUp> = {
   depart: Footprints, straight: ArrowUp, 'slight-left': ArrowUpLeft, left: CornerUpLeft, 'sharp-left': CornerUpLeft,
@@ -254,6 +259,7 @@ export default function Navigate() {
         </div>
         <WalkSummary session={session} arrivedAt={arrivedAt} />
         <InstallPrompt />
+        {session.mode === 'night' && <ArrivalLighting id={session.id} />}
         <button type="button" className="btn btn--primary nav-done" onClick={() => go('/plan', { replace: true })}>
           {t('nav.done')}
         </button>
@@ -269,27 +275,52 @@ export default function Navigate() {
   const day = session.mode === 'day';
   const toStep = me && me.accuracy <= USABLE_ACCURACY_M ? haversineMeters(me.p, current.at) : null;
 
-  const stepWords = (i: number) => {
+  const stepWords = (i: number, locale = lang) => {
     const s = steps[i]!;
-    const instruction = s.guide ? s.guide.instruction[lang] : stepInstruction(s.step, lang);
+    const instruction = s.guide ? s.guide.instruction[locale] : stepInstruction(s.step, locale);
     const hints = s.guide
-      ? [s.distanceM > 0 ? (lang === 'th' ? `เดินต่อ ${formatDistance(s.distanceM, lang)}` : `Walk ${formatDistance(s.distanceM, lang)}`) : null, ...stepHints(s.step, 0, lang, day)].filter(Boolean)
-      : stepHints(s.step, s.distanceM, lang, day);
+      ? [s.distanceM > 0 ? (locale === 'th' ? `เดินต่อ ${formatDistance(s.distanceM, locale)}` : `Walk ${formatDistance(s.distanceM, locale)}`) : null, ...stepHints(s.step, 0, locale, day)].filter(Boolean)
+      : stepHints(s.step, s.distanceM, locale, day);
     return { instruction, hints: hints as string[] };
   };
-  const readStep = (i: number) => {
-    const { instruction, hints } = stepWords(i);
-    const lm = steps[i]!.guide ? t('nav.landmark', { l: steps[i]!.guide!.landmark[lang] }) : '';
+  const spokenStep = (i: number, locale = lang) => {
+    const { instruction, hints } = stepWords(i, locale);
+    const landmark = steps[i]!.guide?.landmark[locale];
+    const label = landmark ? (locale === 'th' ? `จุดสังเกต ${landmark}` : `Look for ${landmark}`) : '';
     // Spoken form: units spelled out, one full stop between parts.
     const spoken = (x: string) =>
       x
         .replace(/(\d)\s*กม\./g, '$1 กิโลเมตร')
         .replace(/(\d)\s*ม\./g, '$1 เมตร')
         .replace(/[.\s]+$/, '');
-    void speak([instruction, ...hints, lm].filter(Boolean).map(spoken).join('. '), lang);
+    return [instruction, ...hints, label].filter(Boolean).map(spoken).join('. ');
   };
+  const readStep = (i: number) => { void speak(spokenStep(i), lang); };
 
   readStepRef.current = readStep;
+
+  const navigationVoice: VoiceActions = {
+    ask_trip: ({ language }) => verifiedRouteSummary(language, session.route, session.mode),
+    repeat_instruction: ({ language, which }) => {
+      const position = which === 'next_segment_warning' ? index + 1 : index;
+      const step = steps[position];
+      if (!step) return [];
+      return speechParts(language, locale => stepClosed(step, new Date())
+        ? (locale === 'th' ? 'ตามข้อมูลเวลาเปิดปิด ทางช่วงนี้อาจปิดอยู่ ตรวจที่ทางเข้าก่อนเดินต่อ'
+          : 'Opening-hours data suggests this passage may be closed. Check the entrance before continuing.')
+        : spokenStep(position, locale));
+    },
+    stop_navigation: ({ language }) => {
+      setConfirmExit(true);
+      return speechParts(language, locale => locale === 'th'
+        ? 'ยืนยันออกจากการนำทางบนหน้าจอได้เลย' : 'Confirm on screen to stop navigation.');
+    },
+    start_live_share: ({ language }) => {
+      setSharing(true);
+      return speechParts(language, locale => locale === 'th'
+        ? 'เปิดหน้าแชร์แล้ว เลือกผู้รับบนอุปกรณ์ได้เลย' : 'Sharing is open. Choose the recipient on your device.');
+    },
+  };
 
   const renderStep = (i: number) => {
     const s = steps[i]!;
@@ -367,6 +398,8 @@ export default function Navigate() {
         ))}
       </div>
       <div className="nav-body">
+        <TripCompanion key={session.id} session={session} online={online} replan={() => setConfirmExit(true)} />
+        {online && <LiveVoice key={`${session.id}:${index}`} screen="navigate" actions={navigationVoice} />}
         <div className="nav-chips">
           {!online && (
             <span className="chip" role="status" data-testid="offline-chip">

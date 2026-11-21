@@ -1,5 +1,6 @@
 const HOLD_MS = 1000;
-const CANCEL_MS = 5000;
+export const SOS_CONFIRM_DELAY_MS = 5000;
+export const SOS_LOCATION_MAX_AGE_MS = 60_000;
 
 export function newSos(id, mode = "practice") {
   if (typeof id !== "string" || !id || !["practice", "live"].includes(mode)) throw new TypeError("Invalid SOS session");
@@ -13,11 +14,11 @@ export function transitionSos(state, event, now) {
   }
   if (event === "press" && state.phase === "idle") return { ...state, phase: "holding", pressedAt: now };
   if (state.phase === "holding" && ["release", "hold_elapsed"].includes(event) && now >= state.pressedAt) {
-    if (now - state.pressedAt >= HOLD_MS) return { ...state, phase: "countdown", deadline: now + CANCEL_MS };
+    if (now - state.pressedAt >= HOLD_MS) return { ...state, phase: "countdown", deadline: now + SOS_CONFIRM_DELAY_MS };
     if (event === "release") return newSos(state.id, state.mode);
   }
   if (state.phase === "idle" && event === "accessible_confirm") {
-    return { ...state, phase: "countdown", deadline: now + CANCEL_MS };
+    return { ...state, phase: "countdown", deadline: now + SOS_CONFIRM_DELAY_MS };
   }
   if (state.phase === "countdown" && event === "countdown_elapsed" && now >= state.deadline) {
     return { ...state, phase: "confirm" };
@@ -31,12 +32,15 @@ export function transitionSos(state, event, now) {
   return state;
 }
 
-export async function submitSos({ mode, id, recipientId, location }, { actor, outbox, transport } = {}) {
+export async function submitSos({ mode, id, recipientId, location }, { actor, outbox, transport, now = Date.now() } = {}) {
   if (mode === "practice") return { status: "practice_only" };
   if (mode !== "live" || !actor?.id || !outbox || !transport || !id || !recipientId) return { status: "unavailable" };
   if (location !== null && (!location || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)
     || Math.abs(location.latitude) > 90 || Math.abs(location.longitude) > 180 || !Number.isFinite(location.observedAt))) {
     return { status: "invalid_location" };
+  }
+  if (location && (location.observedAt < now - SOS_LOCATION_MAX_AGE_MS || location.observedAt > now + 5_000)) {
+    return { status: "stale_location" };
   }
   // The durable host must atomically check the server-side gesture/confirmation, owner, recipient consent, expiry and idempotency.
   const claimed = await outbox.claimConfirmed({ ownerId: actor.id, id, recipientId });

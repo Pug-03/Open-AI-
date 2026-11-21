@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accessibility, CircleCheck, LocateFixed, MapPin, Mic, Moon, Sun } from 'lucide-react';
 import { AccessPanel } from '../components/AccessPanel.tsx';
-import { useAccess } from '../store/access.ts';
+import { setAccess, useAccess } from '../store/access.ts';
 import { activeCity } from '@walkwe/config';
 import {
   bboxContains,
@@ -16,6 +16,7 @@ import {
   type Place,
   type WalkMode,
 } from '@walkwe/core';
+import { speechParts, type VoiceActions } from '@walkwe/core/voice';
 import type { SavedPlace, SavedSlot } from '@walkwe/data';
 import { BottomSheet, SIDE_PANEL_SPACE, TOP_RESERVE, type Snap } from '../components/BottomSheet.tsx';
 import { useDesktop } from '../utils/useDesktop.ts';
@@ -26,6 +27,10 @@ import { MapBoundary } from '../components/MapBoundary.tsx';
 import { PickerBody, PickerHeader } from '../components/plan/PlacePicker.tsx';
 import { RouteCard } from '../components/plan/RouteCard.tsx';
 import { ResultsHeader, RouteResults, type RoutingState } from '../components/plan/RouteResults.tsx';
+import { AgenticAsk } from '../components/plan/AgenticTrip.tsx';
+import { planRequest, publicLandmark, receiveIntent, type AgenticIntent } from '../agentic.ts';
+import { LiveVoice } from '../components/LiveVoice.tsx';
+import { verifiedRouteSummary } from '../voice/route.ts';
 import { WalkTimePanel, type Departure } from '../components/plan/WalkTimePanel.tsx';
 import { GeoHelp, type GeoProblem } from '../components/plan/GeoHelp.tsx';
 import { currentGeoEnvironment } from '../platform/geoEnv.ts';
@@ -65,14 +70,8 @@ const SLOTS: SavedSlot[] = ['home', 'work', 'station', 'other'];
 /** Judges' demo (/plan?demo=1): the pilot route that has a photo guide. */
 function demoPlaces(lang: 'th' | 'en'): { from: PickedPlace; to: PickedPlace } {
   return {
-    from: { id: 'demo:bts-siam', name: lang === 'en' ? 'BTS Siam' : 'BTS สยาม', detail: '', location: { lat: 13.74563, lng: 100.53412 }, kind: 'search' },
-    to: {
-      id: 'demo:centralworld',
-      name: lang === 'en' ? 'CentralWorld' : 'เซ็นทรัลเวิลด์',
-      detail: '',
-      location: { lat: 13.7465769, lng: 100.5390414 },
-      kind: 'search',
-    },
+    from: publicLandmark('bts:CEN', lang)!,
+    to: publicLandmark('osm:W157482067', lang)!,
   };
 }
 
@@ -271,6 +270,19 @@ export default function Plan() {
     [departure, from],
   );
 
+  const applyIntent = (draft: AgenticIntent) => {
+    const suggestedFrom = publicLandmark(draft.from, lang);
+    const suggestedTo = publicLandmark(draft.to, lang);
+    if (suggestedFrom) setFrom(suggestedFrom);
+    if (suggestedTo) setTo(suggestedTo);
+    setModeOverride(draft.mode === 'auto' ? null : draft.mode);
+    if (draft.time) {
+      const today = localInputValue(new Date(), activeCity.timezone).split('T')[0];
+      setDeparture({ kind: 'at', local: `${today}T${draft.time}` });
+    }
+    if (draft.noStairs) setAccess({ stepFree: true });
+  };
+
   // Load the pilot data in the background as soon as both points are known.
   useEffect(() => {
     if (from && to) routing.warm().then(setMeta, () => {});
@@ -299,7 +311,11 @@ export default function Plan() {
       const routes = raw.routes.filter((r) => r.lengthM <= activeCity.maxWalkM);
       if (run !== routeRun.current) return;
       if (!routes.length) setRoutingState({ status: 'error', reason: access.stepFree ? 'too-far-step-free' : 'too-far' });
-      else setRoutingState({ status: 'done', result: { ...raw, routes }, mode, cloud });
+      else setRoutingState({
+        status: 'done', result: { ...raw, routes }, mode, cloud,
+        agentRequest: planRequest(from, to, localInputValue(at, activeCity.timezone),
+          { mode, language: lang, noStairs: access.stepFree }),
+      });
     } catch (e) {
       if (run !== routeRun.current) return;
       setRoutingState({ status: 'error', reason: e instanceof RoutingError ? e.reason : 'failed' });
@@ -314,16 +330,19 @@ export default function Plan() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navigateTo = useGo();
-  const startNavigation = async () => {
-    if (routingState?.status !== 'done' || !from || !to) return;
+  const startNavigation = async (signal?: AbortSignal) => {
+    if (routingState?.status !== 'done' || !from || !to || signal?.aborted) return false;
     const route = routingState.result.routes[selectedRoute];
-    if (!route) return;
+    if (!route) return false;
+    const run = routeRun.current;
     const guides = await loadGuides().catch(() => []);
+    if (signal?.aborted || routeRun.current !== run) return false;
     const all = routingState.result.routes;
     const shortest = all.find((r) => r.kinds.includes('shortest')) ?? all[0]!;
     const baseline = { lengthM: shortest.lengthM, durationS: shortest.durationS, shadeShare: shortest.shadeShare, safetyScore: shortest.safetyScore };
     saveSession(buildSession(route, routingState.mode, from.location, to.location, guides, to.name, baseline));
     navigateTo('/navigate');
+    return true;
   };
 
   const leaveResults = () => {
@@ -332,6 +351,55 @@ export default function Plan() {
     setMode({ type: 'overview' });
     setSnap('half');
   };
+
+  const planVoice: VoiceActions = {
+    plan_trip: async ({ utterance, language }, signal) => {
+      const draft = await receiveIntent(utterance, language === 'both' ? lang : language, signal);
+      if (signal.aborted || (!draft.from && !draft.to)) return [];
+      applyIntent(draft);
+      return speechParts(language, locale => locale === 'th'
+        ? 'เติมข้อมูลทริปแล้ว ตรวจสถานที่และเวลาก่อนกดดูเส้นทาง'
+        : 'I filled in the trip details. Check the places and time before finding routes.');
+    },
+  };
+
+  const resultsVoice: VoiceActions = {};
+  if (routingState?.status === 'done') {
+    const { result, mode: walkMode } = routingState;
+    const shortest = result.routes.find(route => route.kinds.includes('shortest'));
+    const summary = (routeIndex: number, language: 'th' | 'en' | 'both') => {
+      const route = result.routes[routeIndex];
+      return route ? verifiedRouteSummary(language, route, walkMode, shortest) : [];
+    };
+    const choose = (routeIndex: number, language: 'th' | 'en' | 'both') => {
+      if (!result.routes[routeIndex]) return [];
+      setSelectedRoute(routeIndex);
+      return summary(routeIndex, language);
+    };
+    resultsVoice.ask_trip = ({ language }) => summary(selectedRoute, language);
+    resultsVoice.select_route = ({ language, route_ref }) => choose(/^[1-3]$/.test(route_ref)
+      ? Number(route_ref) - 1 : result.routes.findIndex(route => route.kinds.some(kind => kind === route_ref)), language);
+    resultsVoice.change_route = ({ language, change }) => {
+      if (change === 'keep_route') return summary(selectedRoute, language);
+      if (change === 'shortest') return choose(shortest ? result.routes.indexOf(shortest) : -1, language);
+      if (change === 'prefer_covered') {
+        const covered = (i: number) => result.routes[i]!.runs.reduce((length, run) => length + (run.permanent ? run.lengthM : 0), 0);
+        const best = result.routes.reduce((index, _, i) => covered(i) > covered(index) ? i : index, selectedRoute);
+        return covered(best) > 0 ? choose(best, language) : [];
+      }
+      if (change === 'avoid_stairs' || change === 'prefer_lit') {
+        if (change === 'avoid_stairs') setAccess({ stepFree: true });
+        else { setModeOverride('night'); setFactors(['lit']); }
+        leaveResults();
+        return speechParts(language, locale => locale === 'th'
+          ? 'ตั้งค่าแล้ว กดดูเส้นทางใหม่ได้เลย' : 'I updated the preference. Tap See routes to recalculate.');
+      }
+      return [];
+    };
+    resultsVoice.start_navigation = async ({ language }, signal) =>
+      await startNavigation(signal) ? speechParts(language, locale => locale === 'th'
+        ? 'เริ่มนำทางตามเส้นที่เลือกแล้ว' : 'Navigation has started on the selected route.') : [];
+  }
 
   const pickTitle =
     (mode.type === 'pick' || mode.type === 'pin') && mode.slot
@@ -342,7 +410,7 @@ export default function Plan() {
   let body: React.ReactNode = null;
   if (mode.type === 'results' && routingState) {
     header = <ResultsHeader onBack={leaveResults} mode={routingState.status === 'done' ? routingState.mode : (modeOverride ?? autoMode)} />;
-    body = (
+    body = (<>
       <RouteResults
         state={routingState}
         selected={selectedRoute}
@@ -361,7 +429,8 @@ export default function Plan() {
           void findRoutes(when, modeForTime(when, from?.location ?? activeCity.center));
         }}
       />
-    );
+      {routingState.status === 'done' && <LiveVoice screen="results" actions={resultsVoice} />}
+    </>);
   } else if (mode.type === 'pin') {
     header = (
       <div className="pin-head">
@@ -447,6 +516,8 @@ export default function Plan() {
     );
     body = (
       <>
+        <AgenticAsk onDraft={applyIntent} />
+        <LiveVoice screen="plan" actions={planVoice} />
         {from && to && (
           <div className="ready fade-in" data-testid="ready" role="status">
             <span className="ready-title">

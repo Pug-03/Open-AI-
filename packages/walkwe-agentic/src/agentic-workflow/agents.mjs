@@ -21,7 +21,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     time: placeValue, noStairs: { type: "boolean" },
   });
 
-  async function intent({ text, useModel = false }) {
+  async function intent({ text, useModel = false, signal: requestSignal }) {
     if (typeof text !== "string" || !text.trim() || text.length > 500) return { status: "invalid" };
     const localDraft = localIntent(text, places);
     const explicitPlaces = localIntent === parseIntent && hasRouteMarkers(text);
@@ -36,7 +36,8 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
       { ...explicitFields, ...(explicitPlaces ? { from, to } : {}) }) : null;
     let fallback = useModel && model ? "intent_context_budget" : null;
     if (context) {
-      const signal = AbortSignal.timeout(agentConfig.intentTimeoutMs);
+      const timeout = AbortSignal.timeout(agentConfig.intentTimeoutMs);
+      const signal = requestSignal ? AbortSignal.any([timeout, requestSignal]) : timeout;
       try {
         const draft = await model.structured("intent", {
           instructions: instructions.intent, input: JSON.stringify(context),
@@ -92,7 +93,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
       : { ...fallback, trace, loop, fallback: reason };
   }
 
-  async function companion({ event, route, warnings = 0, handled = [], useModel = false }) {
+  async function companion({ event, route, warnings = 0, handled = [], useModel = false, signal: requestSignal }) {
     const text = companionNotice(event, route);
     if (!text || !Number.isInteger(warnings) || warnings < 0 || warnings >= noticeLimit
       || !Array.isArray(handled) || handled.includes(event)) {
@@ -102,10 +103,12 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     let source = "system";
     if (useModel && model) {
       try {
+        const timeout = AbortSignal.timeout(4000);
+        const signal = requestSignal ? AbortSignal.any([timeout, requestSignal]) : timeout;
         const result = await model.structured("companion", {
           instructions: instructions.companion,
           input: JSON.stringify({ event, route: { unknown: route.unknown }, warnings }),
-          schema: companionSchema, signal: AbortSignal.timeout(4000),
+          schema: companionSchema, signal,
         });
         if (result?.action === "silent") return { action: "silent", warnings, handled: [...handled, event] };
         if (["warn", "offer_replan"].includes(result?.action)) {

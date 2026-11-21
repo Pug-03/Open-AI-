@@ -28,7 +28,7 @@ function sleep(ms, signal) {
   });
 }
 
-export function createResearchClientTool({ getSelectedSegmentId, announce, signal, proxyFetch = fetch, pollMs = 3000 }) {
+export function createResearchClientTool({ getSelectedSegmentId, getDatasetVersion, announce, signal, proxyFetch = fetch, pollMs = 3000 }) {
   const tracking = new Set();
 
   async function track(id) {
@@ -64,7 +64,8 @@ export function createResearchClientTool({ getSelectedSegmentId, announce, signa
     try {
       const timeout = AbortSignal.timeout(5000);
       const response = await proxyFetch(route, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ segmentId }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ segmentId, datasetVersion: getDatasetVersion?.() }),
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
       if (!response.ok) return reply("failed", failure);

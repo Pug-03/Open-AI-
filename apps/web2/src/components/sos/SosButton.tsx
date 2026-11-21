@@ -4,8 +4,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { MapPin, MessageCircle, MessageSquareText, Phone, Share2, UserPlus, X } from 'lucide-react';
 import { activeCity } from '@walkwe/config';
 import type { LatLng } from '@walkwe/core';
-import { createSosController, type SosState } from '../../sos/controller.ts';
+import { createSosController, OPEN_SOS_VOICE, type SosState } from '../../sos/controller.ts';
 import { lineShareUrl, smsUrl, sosMessage } from '../../sos/message.ts';
+import { prepareSosRelay, relayLocation, updateSosRelay, type PreparedRelay, type RelayStatus } from '../../sos/relay.ts';
 import { isIOS } from '../../pwa/install.ts';
 import { platform } from '../../services.ts';
 import { loadContacts, loadSelfPhone } from '../../store/contacts.ts';
@@ -37,17 +38,42 @@ function SosButtonInner() {
   langRef.current = lang;
   const toast = useToast();
   const [state, setState] = useState<SosState>('idle');
+  const [voiceHelp, setVoiceHelp] = useState(false);
+  const showHelp = state === 'sent' || voiceHelp;
   const [hold, setHold] = useState(0);
   const [left, setLeft] = useState(COUNTDOWN_S);
-  const [fix, setFix] = useState<{ p: LatLng; accuracy: number } | null | 'pending'>(null);
+  const [fix, setFix] = useState<{ p: LatLng; accuracy: number; observedAt: number } | null | 'pending'>(null);
   const locating = useRef<Promise<void> | null>(null);
+  const pendingRelay = useRef<Promise<PreparedRelay | null> | null>(null);
+  const relayRequested = useRef(false);
+  const relayBusy = useRef(false);
+  const [relay, setRelay] = useState<PreparedRelay | null>(null);
+  const [relayStatus, setRelayStatus] = useState<RelayStatus | null>(null);
+
+  const cancelUnsentRelay = () => {
+    const pending = pendingRelay.current;
+    pendingRelay.current = null;
+    if (pending && !relayRequested.current) {
+      void pending.then((attempt) => attempt && updateSosRelay({ action: 'cancel', id: attempt.id }));
+    }
+  };
 
   const ctl = useMemo(
     () =>
       createSosController({
         holdMs: HOLD_MS,
         countdownS: COUNTDOWN_S,
-        onState: setState,
+        onState: (next) => {
+          setState(next);
+          if (next !== 'countdown' || !import.meta.env.VITE_SOS_PROXY_URL) return;
+          relayRequested.current = false;
+          relayBusy.current = false;
+          const request = prepareSosRelay();
+          pendingRelay.current = request;
+          void request.then((attempt) => {
+            if (pendingRelay.current === request) setRelay(attempt);
+          });
+        },
         onHold: setHold,
         onTick: (n) => {
           setLeft(n);
@@ -59,7 +85,19 @@ function SosButtonInner() {
       }),
     [],
   );
-  useEffect(() => () => ctl.reset(), [ctl]);
+  useEffect(() => () => { ctl.reset(); cancelUnsentRelay(); }, [ctl]);
+  useEffect(() => {
+    const open = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail?.opened !== 'boolean' || state === 'holding' || state === 'countdown') return;
+      if (!showHelp) {
+        setFix(null);
+        setVoiceHelp(true);
+      }
+      event.detail.opened = true;
+    };
+    window.addEventListener(OPEN_SOS_VOICE, open);
+    return () => window.removeEventListener(OPEN_SOS_VOICE, open);
+  }, [state, showHelp]);
 
   // Start finding the location as soon as the hold begins, so it's ready
   // by the time the countdown ends.
@@ -68,7 +106,7 @@ function SosButtonInner() {
     setFix('pending');
     locating.current = platform
       .currentPosition({ highAccuracy: true, timeoutMs: 10_000 })
-      .then((f) => setFix({ p: { lat: f.lat, lng: f.lng }, accuracy: f.accuracy }))
+      .then((f) => setFix({ p: { lat: f.lat, lng: f.lng }, accuracy: f.accuracy, observedAt: f.at }))
       .catch(() => setFix(null))
       .finally(() => (locating.current = null));
   };
@@ -81,6 +119,10 @@ function SosButtonInner() {
   const sendRef = useRef<HTMLDivElement>(null);
   /** Back to idle, focus returned to the SOS button (it was hidden meanwhile). */
   const close = () => {
+    cancelUnsentRelay();
+    setRelay(null);
+    setRelayStatus(null);
+    setVoiceHelp(false);
     ctl.reset();
     requestAnimationFrame(() => fabRef.current?.focus());
   };
@@ -93,11 +135,11 @@ function SosButtonInner() {
   // Keyboard: Escape cancels the countdown / closes the send screen; on the
   // send screen focus moves in and Tab stays inside it.
   useEffect(() => {
-    if (state !== 'countdown' && state !== 'sent') return undefined;
-    if (state === 'sent') requestAnimationFrame(() => sendRef.current?.querySelector<HTMLElement>('a, button')?.focus());
+    if (state !== 'countdown' && !showHelp) return undefined;
+    if (showHelp) requestAnimationFrame(() => sendRef.current?.querySelector<HTMLElement>('a, button')?.focus());
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') return state === 'countdown' ? cancel() : close();
-      if (e.key !== 'Tab' || state !== 'sent' || !sendRef.current) return;
+      if (e.key !== 'Tab' || !showHelp || !sendRef.current) return;
       const items = sendRef.current.querySelectorAll<HTMLElement>('a, button');
       const a = items[0], z = items[items.length - 1];
       if (!a || !z) return;
@@ -111,7 +153,7 @@ function SosButtonInner() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, showHelp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const message = () =>
     sosMessage({
@@ -122,7 +164,33 @@ function SosButtonInner() {
       accuracyM: fix && fix !== 'pending' ? fix.accuracy : null,
       selfPhone: loadSelfPhone(),
     });
-  const contacts = state === 'sent' ? loadContacts() : [];
+  const contacts = showHelp ? loadContacts() : [];
+  const th = lang === 'th';
+  const relayCanSend = !relayStatus || ['too_early', 'stale_location', 'invalid_location'].includes(relayStatus);
+
+  const sendRelay = async (recipientId: string) => {
+    if (!relay || !relayCanSend || relayBusy.current || state !== 'sent') return;
+    relayRequested.current = true;
+    relayBusy.current = true;
+    const pending = pendingRelay.current;
+    setRelayStatus('sending');
+    const { status } = await updateSosRelay({ action: 'confirm', id: relay.id, recipientId, location: relayLocation(fix === 'pending' ? null : fix) });
+    if (pendingRelay.current === pending) {
+      relayBusy.current = false;
+      setRelayStatus(status);
+    }
+  };
+
+  const refreshRelay = async () => {
+    if (!relay || relayBusy.current) return;
+    relayBusy.current = true;
+    const pending = pendingRelay.current;
+    const { status } = await updateSosRelay({ action: 'status', id: relay.id });
+    if (pendingRelay.current === pending) {
+      relayBusy.current = false;
+      if (status !== 'unavailable') setRelayStatus(status);
+    }
+  };
 
   return (
     <>
@@ -147,7 +215,7 @@ function SosButtonInner() {
           }
         }}
         onKeyUp={(e) => (e.key === ' ' || e.key === 'Enter') && ctl.release()}
-        hidden={state === 'countdown' || state === 'sent'}
+        hidden={state === 'countdown' || showHelp}
       >
         <span className="sos-bar" aria-hidden="true" style={{ transform: `scaleX(${hold})` }} />
         <span className="sos-face">SOS</span>
@@ -189,7 +257,7 @@ function SosButtonInner() {
           document.body,
         )}
 
-      {state === 'sent' &&
+      {showHelp &&
         createPortal(
           <div ref={sendRef} className="sos-overlay sos-overlay--send" role="dialog" aria-modal="true" aria-labelledby="sos-send-title" data-testid="sos-send">
             <header className="sos-send-head">
@@ -236,6 +304,28 @@ function SosButtonInner() {
                 </button>
               )}
             </div>
+            {relay && relay.recipients.length > 0 && (
+              <section className="sos-actions" aria-label={th ? 'ส่งถึงผู้ติดต่อที่ยืนยันแล้ว' : 'Send to a verified contact'}>
+                {relayCanSend && (
+                  <>
+                    <p className="small">{th ? 'ส่งคำขอช่วยเหลือพร้อมตำแหน่งล่าสุดหากมี' : 'Send a help request with your recent location if available.'}</p>
+                    {relay.recipients.map(({ id, label }) => (
+                      <button key={id} type="button" className="btn sos-action" onClick={(event) => {
+                        if (event.isTrusted) void sendRelay(id);
+                      }}>
+                        {th ? `ส่งให้ ${label}` : `Send to ${label}`}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {relayStatus && <p className="small" role="status">{relayFeedback(relayStatus, th)}</p>}
+                {relayStatus && ['provider_accepted', 'sending', 'delivery_unknown'].includes(relayStatus) && (
+                  <button type="button" className="btn btn--ghost" onClick={() => void refreshRelay()}>
+                    {th ? 'ตรวจสถานะ' : 'Check status'}
+                  </button>
+                )}
+              </section>
+            )}
             <section className="sos-call" aria-labelledby="sos-call-title">
             <h3 className="sos-call-title" id="sos-call-title">
               {t('sos.call')}
@@ -261,4 +351,17 @@ function SosButtonInner() {
         )}
     </>
   );
+}
+
+function relayFeedback(status: RelayStatus, th: boolean): string {
+  switch (status) {
+    case 'sending': return th ? 'กำลังส่งคำขอช่วยเหลือ' : 'Sending your help request.';
+    case 'provider_accepted': return th ? 'ระบบรับคำขอส่งแล้ว รอผู้รับยืนยัน' : 'The delivery service accepted it. Waiting for your contact to confirm.';
+    case 'acknowledged': return th ? 'ผู้ติดต่อยืนยันว่าได้รับข้อความแล้ว' : 'Your contact confirmed receipt.';
+    case 'delivery_unknown': return th ? 'ยังไม่ทราบว่าข้อความถึงหรือไม่ คุณโทรหรือเปิดแอปส่งข้อความได้' : 'Delivery is uncertain. You can call or open a messaging app.';
+    case 'too_early': return th ? 'รอสักครู่แล้วกดส่งอีกครั้ง' : 'Wait a moment, then tap Send again.';
+    case 'stale_location':
+    case 'invalid_location': return th ? 'ตำแหน่งไม่พร้อม คุณยังโทรหรือส่งด้วยตนเองได้' : 'Your location is unavailable. You can still call or message manually.';
+    default: return th ? 'ส่งผ่านระบบไม่ได้ คุณยังโทรหรือส่งด้วยตนเองได้' : 'Sending through Walk We is unavailable. You can still call or message manually.';
+  }
 }
