@@ -36,7 +36,9 @@ export interface MapViewProps {
 
 maplibregl.setWorkerUrl(workerUrl);
 
-const MAX_BOUNDS_PAD = 0.15; // degrees around the city, so panning stays local
+// Keep the map over the pilot area (the only place with data). A small pad
+// lets the edges breathe without opening onto empty whole-city tiles.
+const MAX_BOUNDS_PAD = 0.02; // ~2 km around the pilot bounds
 
 const ROUTE_SOURCE = 'walkwe-routes';
 
@@ -185,7 +187,7 @@ export default function MapView({
   // Create once.
   useEffect(() => {
     if (!containerRef.current) return;
-    const [w, s, e, n] = activeCity.bounds;
+    const [w, s, e, n] = activeCity.pilotBounds;
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
@@ -193,6 +195,9 @@ export default function MapView({
         style: env.mapStyle[themeRef.current],
         center: [activeCity.center.lng, activeCity.center.lat],
         zoom: activeCity.defaultZoom,
+        // The pilot is small: stop the user zooming out onto empty whole-city
+        // tiles, which left the planner card floating over a blank map.
+        minZoom: 13,
         maxBounds: [
           [w - MAX_BOUNDS_PAD, s - MAX_BOUNDS_PAD],
           [e + MAX_BOUNDS_PAD, n + MAX_BOUNDS_PAD],
