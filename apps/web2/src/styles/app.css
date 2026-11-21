@@ -29,53 +29,24 @@
 
 /* ---------- Language: one tap, Thai <> English ---------- */
 .lang-toggle {
-  position: relative;
   display: inline-grid;
   place-items: center;
   flex: none;
   width: var(--tap);
   height: var(--tap);
-  border-radius: var(--radius);
-  border: var(--hair) solid var(--rule);
-  background: var(--surface);
-  color: var(--heading);
-  transition: transform var(--dur-fast) ease;
+  padding: 0;
+  border-radius: 50%;
+  border: var(--hair) solid color-mix(in srgb, var(--accent) 65%, var(--surface-2));
+  background: var(--surface-2);
+  color: var(--accent);
+}
+@media (hover: hover) {
+  .lang-toggle:hover {
+    border-color: currentColor;
+  }
 }
 .lang-toggle:active {
-  transform: translateY(1px);
-}
-.lang-toggle-pulse {
-  display: none;
-}
-.lang-toggle-ic {
-  animation: fadeIn var(--dur) var(--ease-out);
-}
-.lang-toggle[data-turn='0'] .lang-toggle-ic {
-  animation: none;
-}
-/* The active language, lettered on a tab at the corner of the box. */
-.lang-toggle-badge {
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  min-width: 24px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: var(--radius);
-  display: grid;
-  place-items: center;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  line-height: 1;
-  background: var(--ink);
-  color: var(--paper);
-  animation: badgeIn var(--dur) var(--ease-out);
-}
-@keyframes badgeIn {
-  from {
-    opacity: 0;
-    transform: translateX(-6px);
-  }
+  background: var(--surface);
 }
 
 /* ---------- Segmented control (time / mode / theme) ---------- */
@@ -1506,7 +1477,7 @@ textarea {
 }
 .data-head .lang-toggle,
 .flow-top .lang-toggle {
-  margin: 0 5px 5px auto; /* its language tab hangs past the box */
+  margin-inline-start: auto;
 }
 .setup-back,
 .data-head > .icon-btn,

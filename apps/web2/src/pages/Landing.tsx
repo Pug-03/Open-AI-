@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { BestTime } from '../components/BestTime.tsx';
+import { LangToggle } from '../components/LangToggle.tsx';
 import { LogoMark } from '../components/Logo.tsx';
 import { PLAN_BBOX, TRIPS } from '../components/plan-view/demo.ts';
 import { prepareScene, type PreparedScene } from '../components/plan-view/planDraw.ts';
@@ -33,7 +34,7 @@ const NAV: Array<[string, CopyKey]> = [
 ];
 
 export default function Landing() {
-  const { lang, setLang } = useI18n();
+  const { lang } = useI18n();
   const c = (k: CopyKey, v?: Record<string, string | number>) => copy(lang, k, v);
   const go = useGo();
   const [prepared, setPrepared] = useState<PreparedScene | null>(null);
@@ -93,17 +94,7 @@ export default function Landing() {
             </a>
           ))}
         </nav>
-        <button
-          type="button"
-          className="lp-lang"
-          onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
-          aria-label={lang === 'th' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
-          lang={lang === 'th' ? 'en' : 'th'}
-          data-testid="lang-toggle"
-        >
-          <span aria-current={lang === 'th' ? 'true' : undefined}>TH</span>
-          <span aria-current={lang === 'en' ? 'true' : undefined}>EN</span>
-        </button>
+        <LangToggle className="lp-lang" />
         <button type="button" className="btn btn--primary lp-nav-start" onClick={start} data-testid="nav-start">
           {c('nav.start')}
           <ArrowRight size={18} aria-hidden="true" className="btn-arrow" />

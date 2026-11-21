@@ -306,7 +306,7 @@ Solid, square and tall; a button is a labelled cell, not a pill.
 - **Icon button:** 48 px square, hairline border, surface ground; a bare variant drops border and ground for back and close.
 
 ### Segmented control
-One ink frame with square cells divided by ink hairlines; the pressed cell is the primary ground. Used for time, mode and theme, and as the TH / EN switch on the welcome strip (pressed cell in ink on paper).
+One ink frame with square cells divided by ink hairlines; the pressed cell is the primary ground. Used for time, mode and theme.
 
 ### Chips
 - **Style:** a label lettered on the drawing: surface ground, 1 px ink border, 2 px corners, 40 px tall, Label type with a 16 to 18 px line icon. Used for the mode, offline state and distance to the step.
@@ -327,7 +327,7 @@ One ink frame with square cells divided by ink hairlines; the pressed cell is th
 - **Switch:** a 48 by 28 px square frame with a 20 px square block that slides right and turns the frame primary when on.
 
 ### Navigation
-The welcome page has a fixed 64 px top strip on the page ground with a hairline beneath: mark and wordmark, section links from 960 px (dim, 600 weight, a 2 px rule drawing in from the left on hover and focus), the TH / EN switch and a compact primary Start. The strip takes the night sheet while the stage beneath it is in night. App pages have no global navigation: a title row with a bare back button, the title and the language toggle, closed by a frame rule. Page changes slide 16 px along the reading line with a cross-fade (220 ms), forward to the left and back to the right.
+The welcome page has a fixed 64 px top strip on the page ground with a hairline beneath: mark and wordmark, section links from 960 px (dim, 600 weight, a 2 px rule drawing in from the left on hover and focus), the circular language toggle and a compact primary Start. The strip takes the night sheet while the stage beneath it is in night. The language toggle uses the theme’s accent for the translation icon and the raised surface for its circle. App pages have no global navigation: a title row with a bare back button, the title and the language toggle, closed by a frame rule. Page changes slide 16 px along the reading line with a cross-fade (220 ms), forward to the left and back to the right.
 
 ### Legend keys
 Small swatches that say what a line on the drawing means, used in legends, readouts and captions: a solid 18 by 5 px bar for the shaded or safer stretch, an amber bar for the sunlit stretch, a 3 px dashed pale line for the night lower-scoring stretch, a 2 px dashed ink line for the shortest route, a 2 px ink tick, a 7 px square for a camera. Every drawing that uses a line style shows its key.

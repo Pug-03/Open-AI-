@@ -80,30 +80,6 @@
 }
 .lp-lang {
   margin-inline-start: auto;
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap);
-  padding: 0;
-  border: var(--hair) solid var(--border);
-  border-radius: var(--radius);
-  background: transparent;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  overflow: hidden;
-}
-.lp-lang span {
-  display: grid;
-  place-items: center;
-  min-width: 44px;
-  height: 46px;
-  color: var(--text-dim);
-  transition:
-    background var(--dur) ease,
-    color var(--dur) ease;
-}
-.lp-lang span[aria-current] {
-  background: var(--ink);
-  color: var(--paper);
 }
 .lp-nav .lp-nav-start {
   width: auto;
