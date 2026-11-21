@@ -294,7 +294,7 @@ export default function Plan() {
         ? await Promise.race([weather.cloudCover(at, from.location).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2500))])
         : null;
     try {
-      const raw = await routing.route({ from: from.location, to: to.location, departAt: at, mode, cloudCover: cloud, nightFactors: factors, stepFree: access.stepFree });
+      const raw = await routing.route({ from: from.location, to: to.location, departAt: at, mode, cloudCover: cloud, nightFactors: factors, stepFree: access.stepFree }, true);
       // Keep only walks within the limit (a detour for shade can push one over).
       const routes = raw.routes.filter((r) => r.lengthM <= activeCity.maxWalkM);
       if (run !== routeRun.current) return;

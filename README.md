@@ -73,7 +73,7 @@ apps/web2        React + Vite PWA (UI only)
 packages/core    routing, shadow, sun, scoring + adapter interfaces. Pure TypeScript, runs in Node and in a Worker
 packages/data    Zod schemas (mirror future PostGIS tables) + dataset loaders
 config/cities    per-city settings: time zone, bounds, emergency numbers, data sources
-apps/ai-proxy    Cloudflare Worker for optional ElevenLabs speech (see AI_USAGE.md)
+apps/ai-proxy    Cloudflare Worker for optional speech and evidence ranking (see AI_USAGE.md)
 packages/walkwe-agentic   Local Agentic workflows, Worker, MCP and evals
 packages/verify          Deterministic checks against route evidence
 packages/voice-research  Async public street evidence research and review drafts
@@ -164,6 +164,12 @@ Run `npm run test:agentic`, `npm run test:agentic:web2` and `npm run eval:agenti
 for the offline workflow, routing integration and eval suites. See the
 [Agentic architecture](docs/agentic/ARCHITECTURE.md) and
 [OpenAI live eval report](docs/agentic/EVAL_2026-11-21_RERUN.md).
+
+Web2 shows segment evidence directly from the route Worker. The optional
+`POST /route-evidence` action reorders these highlights when the same proxy has
+the `OPENAI_API_KEY` Worker secret and both existing rate limit bindings.
+Requests contain candidate numbers, categories and distances. Map evidence
+remains available when the proxy or OpenAI is unavailable.
 
 ### Optional hosted speech
 

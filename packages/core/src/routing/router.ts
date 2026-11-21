@@ -9,6 +9,7 @@ import {
   RoutingError,
   type NightFactor,
   type Route,
+  type RouteEvidenceSegment,
   type RouteKind,
   type RouteRequest,
   type RouteResult,
@@ -79,18 +80,6 @@ interface Path {
   nodes: number[];
 }
 
-export interface RouteEvidenceSegment {
-  id: string;
-  length: number;
-  light: 'lit' | 'dark' | 'unknown';
-  method: 'osm_lit_tag' | 'lamp_proximity' | 'no_data';
-  stairs: boolean | null;
-  covered: number;
-  shaded?: number;
-}
-
-type RouteWithEvidence = Route & { evidence?: RouteEvidenceSegment[] };
-
 /** RoutingEngine over an in-memory Area (pilot graph). Pure; no I/O. */
 export class AreaRouter implements RoutingEngine {
   readonly id = 'area-astar';
@@ -146,8 +135,6 @@ export class AreaRouter implements RoutingEngine {
     return { perEdge, active };
   }
 
-  routeSync(req: RouteRequest): RouteResult;
-  routeSync(req: RouteRequest, withEvidence: true): Omit<RouteResult, 'routes'> & { routes: RouteWithEvidence[] };
   routeSync(req: RouteRequest, withEvidence = false): RouteResult {
     const { area } = this;
     const maxSnap = this.opts.maxSnapM ?? 300;
@@ -246,6 +233,9 @@ export class AreaRouter implements RoutingEngine {
     const light = flags & WF.LIT_YES ? 'lit' : flags & WF.LIT_NO ? 'dark' : 'unknown';
     return {
       id: `edge:${edge}`, length: this.area.elen[edge]!, light,
+      name: this.area.input.walkways.ways[this.area.eway[edge]!]?.name
+        || this.area.input.malls[this.area.emall[edge]!]?.name || '',
+      noSidewalk: Boolean(flags & WF.NO_SIDEWALK),
       method: light !== 'unknown' ? 'osm_lit_tag' : this.night.litKnown[edge] ? 'lamp_proximity' : 'no_data',
       stairs: this.area.eclass[edge] === WALKWAY_CLASSES.indexOf('steps'),
       covered: flags & (WF.COVERED | WF.INDOOR | WF.TUNNEL) ? 1 : 0,

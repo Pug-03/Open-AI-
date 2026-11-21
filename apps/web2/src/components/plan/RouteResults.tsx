@@ -7,6 +7,7 @@ import type { DatasetMeta } from '../../routing/protocol.ts';
 import { useI18n } from '../../store/i18n.tsx';
 import { formatDistance } from '../../utils/format.ts';
 import { RouteWhy } from './RouteWhy.tsx';
+import { RouteEvidence } from './RouteEvidence.tsx';
 import { BestTime } from '../BestTime.tsx';
 import { copy } from '../../landingCopy.ts';
 import type { LatLng } from '@walkwe/core';
@@ -158,7 +159,13 @@ export function RouteResults({ state, selected, onSelect, onRetry, onStart, onCh
   return (
     <div className="results">
       <ul className="list route-list">{result.routes.map(card)}</ul>
-      {result.routes[selected] && <RouteWhy route={result.routes[selected]!} shortest={shortest} mode={mode} />}
+      {result.routes[selected] && (
+        <>
+          {(!night || !result.routes[selected]!.evidence?.length) &&
+            <RouteWhy route={result.routes[selected]!} shortest={shortest} mode={mode} />}
+          <RouteEvidence key={selected} route={result.routes[selected]!} shortest={shortest} mode={mode} />
+        </>
+      )}
       {/* Pinned to the sheet's foot on phones: the main action never hides below the fold. */}
       <div className="start-dock">
         <button type="button" className="btn btn--primary" onClick={onStart} data-testid="start-nav">

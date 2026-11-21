@@ -139,7 +139,7 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       });
       return post({ id: msg.id, type: 'hourly', hours });
     }
-    const result = router.routeSync({ ...msg.request, departAt: new Date(msg.request.departAt) });
+    const result = router.routeSync({ ...msg.request, departAt: new Date(msg.request.departAt) }, msg.withEvidence);
     post({ id: msg.id, type: 'result', result });
   } catch (err) {
     if (err instanceof RoutingError) post({ id: msg.id, type: 'error', reason: err.reason, message: err.message });
