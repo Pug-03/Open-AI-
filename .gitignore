@@ -4,8 +4,6 @@ dist/
 .env
 .env.local
 .DS_Store
-apps/web/test-results/
-apps/web/playwright-report/
 data/precomputed/
 review/
 
@@ -30,6 +28,5 @@ playwright-report/
 screenshots-iphone/
 
 # Design-tool state
-apps/web/.impeccable/
 .impeccable/
 apps/ai-proxy/dist/
