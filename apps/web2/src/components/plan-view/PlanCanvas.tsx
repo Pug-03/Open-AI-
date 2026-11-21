@@ -12,8 +12,8 @@ export interface PlanCanvasHandle {
  * The plan drawing surface. It only draws when told to (`draw`), so the page
  * decides when a frame is needed; on resize it redraws the last frame.
  */
-export const PlanCanvas = forwardRef<PlanCanvasHandle, { scene: PreparedScene | null; className?: string; label: string; onResize?: () => void }>(
-  function PlanCanvas({ scene, className, label, onResize }, ref) {
+export const PlanCanvas = forwardRef<PlanCanvasHandle, { scene: PreparedScene | null; className?: string; label: string; onResize?: () => void; maxPixels?: number }>(
+  function PlanCanvas({ scene, className, label, onResize, maxPixels = Infinity }, ref) {
     const canvas = useRef<HTMLCanvasElement>(null);
     const last = useRef<PlanFrame | null>(null);
     const dims = useRef({ w: 0, h: 0, dpr: 1 });
@@ -41,19 +41,20 @@ export const PlanCanvas = forwardRef<PlanCanvasHandle, { scene: PreparedScene | 
       if (!el) return;
       const fit = () => {
         const r = el.getBoundingClientRect();
-        // Cap the backing store: a 3x phone gains nothing visible past 2x here.
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // Keep high-DPI and large full-screen canvases within their pixel budget.
+        const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(maxPixels / Math.max(1, r.width * r.height)));
+        if (dims.current.w === r.width && dims.current.h === r.height && dims.current.dpr === dpr) return;
         dims.current = { w: r.width, h: r.height, dpr };
         el.width = Math.max(1, Math.round(r.width * dpr));
         el.height = Math.max(1, Math.round(r.height * dpr));
-        resized.current?.();
-        if (last.current) paint(last.current);
+        if (resized.current) resized.current();
+        else if (last.current) paint(last.current);
       };
       fit();
       const ro = new ResizeObserver(fit);
       ro.observe(el);
       return () => ro.disconnect();
-    }, []);
+    }, [maxPixels]);
 
     useEffect(() => {
       if (scene && last.current) paint(last.current);

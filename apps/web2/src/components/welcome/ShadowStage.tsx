@@ -8,11 +8,11 @@ import { cycleFor, DAY_END_U, timeAt, uAt } from '../plan-view/dayCycle.ts';
 import { DemoCache, SIAM, slotFor, TRIPS, type DemoRoutes } from '../plan-view/demo.ts';
 import { PlanCanvas, type PlanCanvasHandle } from '../plan-view/PlanCanvas.tsx';
 import { frameCamera, nightFor, toPlanPoint, type Camera, type PreparedScene } from '../plan-view/planDraw.ts';
+import { installStageScroll } from './stageScroll.ts';
 
 // The first screen: the shadow plan held in place while the page scrolls.
-// Scrolling turns the clock through one whole day (the time bar is the same
-// control, draggable); the drawing follows the scroll with a little lag so it
-// glides. Past sunset the sheet turns to navy and the night layers come up.
+// Scrolling or dragging the time bar moves the clock through one day.
+// The plan starts at the current time and draws only when the view changes.
 
 type Phase = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'dusk' | 'night';
 interface View {
@@ -30,9 +30,9 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const HOUR = 3_600_000;
 const TICK_HOURS = [6, 9, 12, 15, 18, 21, 0, 3];
 
-function sceneProgress(el: HTMLElement | null): number {
-  if (!el) return 0;
+function sceneProgress(el: HTMLElement): number | null {
   const r = el.getBoundingClientRect();
+  if (r.bottom <= 0 || r.top >= window.innerHeight) return null;
   const run = r.height - window.innerHeight;
   return run > 0 ? clamp01(-r.top / run) : 0;
 }
@@ -68,6 +68,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
   const stageEl = useRef<HTMLDivElement>(null);
   const handleEl = useRef<HTMLDivElement>(null);
   const canvas = useRef<PlanCanvasHandle>(null);
+  const stageScroll = useRef<ReturnType<typeof installStageScroll> | null>(null);
   const cycle = useMemo(() => cycleFor(new Date(), SIAM), []);
   const u0 = useMemo(() => uAt(cycle, new Date()), [cycle]);
   const clock = useMemo(
@@ -85,56 +86,53 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
   const tripInfo = TRIPS[trip]!;
 
   useEffect(() => {
-    const P = prepared;
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-    const a = P ? toPlanPoint(tripInfo.from, P.scene) : { x: 0, y: 0 };
-    const b = P ? toPlanPoint(tripInfo.to, P.scene) : { x: 0, y: 0 };
-    // The clock sweeps in from a little earlier, so the first thing seen is shadows moving.
-    const s = { cur: still ? u0 : u0 - 0.07, cam: null as Camera | null, progress: still ? 1 : 0, key: '' };
+    const section = sceneEl.current;
+    if (!section) return;
+    const a = prepared ? toPlanPoint(tripInfo.from, prepared.scene) : { x: 0, y: 0 };
+    const b = prepared ? toPlanPoint(tripInfo.to, prepared.scene) : { x: 0, y: 0 };
+    let visible = true;
     let frame = 0;
-    const cache = P ? new DemoCache(tripInfo, P.scene, cycle, () => wake.current()) : null;
-    void cache?.fill(slotFor(u0));
+    let last: { p: number; w: number; h: number; routes: DemoRoutes | null } | null = null;
+    const cache = prepared ? new DemoCache(tripInfo, prepared.scene, cycle, requestFrame) : null;
+
+    function requestFrame() {
+      if (visible && !frame) frame = requestAnimationFrame(tick);
+    }
 
     const tick = () => {
       frame = 0;
-      const p = sceneProgress(sceneEl.current);
-      const target = u0 + p * 0.985;
-      s.cur += (target - s.cur) * (still ? 1 : 0.085);
-      if (Math.abs(target - s.cur) < 0.0002) s.cur = target;
-      const at = timeAt(cycle, s.cur);
+      const p = sceneProgress(section);
+      if (p === null) return;
+      const u = u0 + p * 0.985;
+      const slot = slotFor(u);
+      if (!stageScroll.current?.animating) cache?.request(slot);
+      const routes = cache?.at(slot) ?? null;
+      const { w, h } = canvas.current?.size() ?? { w: 0, h: 0 };
+      if (last?.p === p && last.w === w && last.h === h && last.routes === routes) return;
+      const moved = last?.p !== p;
+      last = { p, w, h, routes };
+
+      const at = timeAt(cycle, u);
       const sun = sunPosition(at, SIAM);
       const night = nightFor(sun.altitude);
-      const routes = cache?.at(slotFor(s.cur)) ?? null;
       const hero = 1 - clamp01(p * 7);
-      const size = canvas.current?.size() ?? { w: 0, h: 0 };
-      let moving = false;
-      if (P && size.w) {
-        const goal = cameraFor(size.w, size.h, hero, a, b);
-        if (!s.cam) s.cam = goal;
-        else {
-          const k = still ? 1 : 0.1;
-          s.cam.cx += (goal.cx - s.cam.cx) * k;
-          s.cam.cy += (goal.cy - s.cam.cy) * k;
-          s.cam.scale += (goal.scale - s.cam.scale) * k;
-          moving = Math.abs(goal.cx - s.cam.cx) + Math.abs(goal.cy - s.cam.cy) > 0.3 || Math.abs(goal.scale - s.cam.scale) > 0.002;
-        }
-        if (routes && s.progress < 1) s.progress = still ? 1 : Math.min(1, s.progress + 0.022);
+      if (prepared && w && h) {
+        const cam = cameraFor(w, h, hero, a, b);
         canvas.current?.draw({
-          cam: s.cam,
-          sun,
-          night,
+          cam, sun, night,
           main: routes?.main ?? null,
           alt: routes?.alt ?? null,
-          progress: 1 - (1 - s.progress) ** 3,
           from: { ...a, label: tripInfo.from[lang] },
           to: { ...b, label: tripInfo.to[lang] },
         });
-        stageEl.current?.style.setProperty('--scale-px', `${(100 * s.cam.scale).toFixed(1)}px`);
+        stageEl.current?.style.setProperty('--scale-px', `${(100 * cam.scale).toFixed(1)}px`);
       }
-      stageEl.current?.style.setProperty('--hero', hero.toFixed(3));
-      stageEl.current?.classList.toggle('is-past', hero < 0.4);
-      const v = ((s.cur % 1) + 1) % 1;
-      if (handleEl.current) handleEl.current.style.left = `${(v * 100).toFixed(2)}%`;
+      if (moved) {
+        stageEl.current?.style.setProperty('--hero', hero.toFixed(3));
+        stageEl.current?.classList.toggle('is-past', hero < 0.4);
+      }
+      const v = ((u % 1) + 1) % 1;
+      if (moved && handleEl.current) handleEl.current.style.left = `${(v * 100).toFixed(2)}%`;
 
       // Hours from solar noon, -12..12.
       const fromNoon = ((((at.getTime() - noon) / HOUR) % 24) + 36) % 24 - 12;
@@ -143,28 +141,44 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
         : sun.altitude < 9 ? (fromNoon < 0 ? 'dawn' : 'dusk')
         : Math.abs(fromNoon) < 0.9 ? 'noon'
         : fromNoon < 0 ? 'morning' : 'afternoon';
-      const text = clock.format(at);
-      const key = `${text}|${phase}|${night > 0.5}|${routes ? `${routes.mode}${routes.mainFigures.metres}${routes.mainFigures.score.toFixed(3)}${routes.altFigures?.metres ?? ''}` : ''}`;
-      if (key !== s.key) {
-        s.key = key;
-        setView({ clock: text, alt: sun.altitude, az: sun.azimuth, night: night > 0.5, phase, routes, u: v });
-      }
-      if (s.cur !== target || moving || (routes && s.progress < 1)) frame = requestAnimationFrame(tick);
+      setView({ clock: clock.format(at), alt: sun.altitude, az: sun.azimuth, night: night > 0.5, phase, routes, u: v });
     };
+
     wake.current = () => {
-      if (!frame) frame = requestAnimationFrame(tick);
+      last = null;
+      requestFrame();
     };
-    wake.current();
-    window.addEventListener('scroll', wake.current, { passive: true });
-    window.addEventListener('resize', wake.current);
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(([entry]) => {
+      visible = !!entry?.isIntersecting;
+      if (visible) requestFrame();
+      else if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    });
+    observer?.observe(section);
+    requestFrame();
+    window.addEventListener('scroll', requestFrame, { passive: true });
+    window.addEventListener('resize', requestFrame);
     return () => {
       cache?.stop();
-      window.removeEventListener('scroll', wake.current);
-      window.removeEventListener('resize', wake.current);
+      observer?.disconnect();
+      window.removeEventListener('scroll', requestFrame);
+      window.removeEventListener('resize', requestFrame);
       cancelAnimationFrame(frame);
       wake.current = () => {};
     };
-  }, [prepared, trip, lang, cycle, u0, clock, noon]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [prepared, tripInfo, lang, cycle, u0, clock, noon]);
+
+  useEffect(() => {
+    if (!prepared || !sceneEl.current) return;
+    const scroll = installStageScroll(sceneEl.current, () => wake.current());
+    stageScroll.current = scroll;
+    return () => {
+      scroll.dispose();
+      stageScroll.current = null;
+    };
+  }, [prepared]);
 
   // ---------- The time bar: the same control as scrolling ----------
   const scrollToU = (u: number, smooth = false) => {
@@ -179,6 +193,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
     return clamp01((e.clientX - r.left) / r.width);
   };
   const onBarDown = (e: PointerEvent<HTMLDivElement>) => {
+    stageScroll.current?.stop();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragging(true);
     scrollToU(uFromPointer(e));
@@ -190,6 +205,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
     const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
     if (!step) return;
     e.preventDefault();
+    stageScroll.current?.stop();
     const el = sceneEl.current;
     if (el) window.scrollBy({ top: (step * (el.offsetHeight - window.innerHeight)) / 34 });
   };
@@ -210,7 +226,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
   return (
     <section ref={sceneEl} className="stage-scene" aria-label={c('hero.sheet')}>
       <div ref={stageEl} className={`stage${prepared ? ' is-ready' : ''}`} data-theme={view.night ? 'night' : 'day'}>
-        <PlanCanvas ref={canvas} scene={prepared} className="stage-canvas" label={c('hero.planLabel')} onResize={() => wake.current()} />
+        <PlanCanvas ref={canvas} scene={prepared} maxPixels={1_600_000} className="stage-canvas" label={c('hero.planLabel')} onResize={() => wake.current()} />
         <div className="stage-grid" aria-hidden="true" />
 
         <svg className="stage-north" viewBox="0 0 40 56" role="img" aria-label={c('hero.north')}>
@@ -321,8 +337,10 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
                 type="button"
                 className="btn btn--ghost"
                 onClick={() => {
+                  if (stageScroll.current?.advance(1)) return;
                   const el = sceneEl.current;
-                  if (el) window.scrollBy({ top: (el.offsetHeight - window.innerHeight) * 0.3, behavior: 'smooth' });
+                  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                  if (el) window.scrollBy({ top: (el.offsetHeight - window.innerHeight) * 0.25, behavior: reduced ? 'instant' : 'smooth' });
                 }}
                 data-testid="landing-how"
               >

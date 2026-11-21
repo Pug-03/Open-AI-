@@ -5,7 +5,7 @@ import { DAY_END_U, timeAt, type DayCycle } from './dayCycle.ts';
 import { toPlanRoute, type PlanRoute } from './planDraw.ts';
 
 // The welcome page's live demo: three real trips in the pilot area, routed by
-// the same worker the planner uses, at every half hour or so of the day.
+// the same worker the planner uses, at the time selected on the demo.
 
 export const SIAM: LatLng = { lat: 13.7462, lng: 100.5347 };
 /** The piece of the pilot area the plan draws: [west, south, east, north]. */
@@ -55,7 +55,7 @@ export interface DemoRoutes {
 }
 
 const DAY_SLOTS = 30;
-/** Which precomputed slot covers a position on the day loop. */
+/** Which route sample covers a position on the day loop. */
 export function slotFor(u: number): number {
   const v = ((u % 1) + 1) % 1;
   return v < DAY_END_U ? Math.min(DAY_SLOTS - 1, Math.floor((v / DAY_END_U) * DAY_SLOTS)) : DAY_SLOTS;
@@ -83,9 +83,12 @@ function pick(result: RouteResult, mode: WalkMode, scene: PlanScene): DemoRoutes
   };
 }
 
-/** Routes for every slot of one trip, filled in as the worker answers. */
+/** Routes cached as the visitor explores one trip. */
 export class DemoCache {
-  readonly slots: Array<DemoRoutes | null> = Array.from({ length: SLOT_COUNT }, () => null);
+  private readonly slots: Array<DemoRoutes | null> = Array.from({ length: SLOT_COUNT }, () => null);
+  private readonly requested = new Set<number>();
+  private queued: number | null = null;
+  private loading = false;
   private stopped = false;
 
   constructor(
@@ -95,15 +98,19 @@ export class DemoCache {
     private readonly onSlot: () => void,
   ) {}
 
-  /** Compute outward from `first`, so the time on screen is ready first. */
-  async fill(first: number): Promise<void> {
-    const order: number[] = [];
-    for (let k = 0; k < SLOT_COUNT; k++) {
-      const a = (first + k) % SLOT_COUNT;
-      if (!order.includes(a)) order.push(a);
-    }
-    for (const slot of order) {
-      if (this.stopped) return;
+  request(slot: number): void {
+    if (this.stopped) return;
+    // Keep one request in flight and replace intermediate times during scrubbing.
+    this.queued = this.requested.has(slot) ? null : slot;
+    if (!this.loading && this.queued !== null) void this.load();
+  }
+
+  private async load(): Promise<void> {
+    this.loading = true;
+    while (!this.stopped && this.queued !== null) {
+      const slot = this.queued;
+      this.queued = null;
+      this.requested.add(slot);
       const night = slot === DAY_SLOTS;
       const u = night ? DAY_END_U + 0.06 : ((slot + 0.5) / DAY_SLOTS) * DAY_END_U;
       const mode: WalkMode = night ? 'night' : 'day';
@@ -113,9 +120,10 @@ export class DemoCache {
         this.slots[slot] = pick(result, mode, this.scene);
         this.onSlot();
       } catch {
-        // One slot failing leaves its neighbours to stand in for it.
+        // One slot failing leaves its cached neighbours to stand in for it.
       }
     }
+    this.loading = false;
   }
 
   /** The slot's routes, or the nearest slot already computed. */

@@ -4,29 +4,19 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
 /**
  * How far an element has travelled through the viewport: 0 as its top comes
- * in at the bottom edge, 1 as its bottom leaves at the top. The value eases
- * toward the real one each frame, so the drawing it drives follows the scroll
- * smoothly instead of stepping with the wheel. Jumps straight there when the
- * user asks for reduced motion.
+ * in at the bottom edge, 1 as its bottom leaves at the top. Scroll events
+ * are grouped into one update per frame.
  */
 export function useViewProgress(ref: RefObject<HTMLElement | null>): number {
   const [p, setP] = useState(0);
   useEffect(() => {
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     let frame = 0;
-    let shown = -1;
-    const target = () => {
-      const el = ref.current;
-      if (!el) return 0;
-      const r = el.getBoundingClientRect();
-      return clamp01((window.innerHeight - r.top) / (window.innerHeight + r.height));
-    };
     const tick = () => {
-      const goal = target();
-      shown = shown < 0 || still ? goal : shown + (goal - shown) * 0.12;
-      if (Math.abs(goal - shown) < 0.0008) shown = goal;
-      setP(shown);
-      frame = shown === goal ? 0 : requestAnimationFrame(tick);
+      frame = 0;
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setP(clamp01((window.innerHeight - r.top) / (window.innerHeight + r.height)));
     };
     const wake = () => {
       if (!frame) frame = requestAnimationFrame(tick);
