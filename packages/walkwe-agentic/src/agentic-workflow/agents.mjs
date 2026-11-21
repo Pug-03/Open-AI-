@@ -12,7 +12,8 @@ const companionSchema = objectSchema({ action: stringEnum("silent", "warn", "off
 const noticeLimit = agentConfig.companionMaxWarnings;
 const stateError = reason => ({ status: reason, decision: "ABSTAIN", routes: [] });
 
-export function createWorkflows({ model = null, route = planRoute, localIntent = parseIntent, places = fixturePlaces } = {}) {
+export function createWorkflows({ model = null, route = planRoute, localIntent = parseIntent, places = fixturePlaces,
+  departure = route === planRoute ? suggestDeparture : null } = {}) {
   const placeIds = new Set(places.map(place => place.id));
   const catalogueId = { ...placeValue, enum: [...placeIds, null] };
   const intentSchema = objectSchema({
@@ -22,7 +23,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
 
   async function intent({ text, useModel = false }) {
     if (typeof text !== "string" || !text.trim() || text.length > 500) return { status: "invalid" };
-    const localDraft = localIntent(text);
+    const localDraft = localIntent(text, places);
     const explicitPlaces = localIntent === parseIntent && hasRouteMarkers(text);
     const from = placeIds.has(localDraft.from) ? localDraft.from : null;
     const to = placeIds.has(localDraft.to) ? localDraft.to : null;
@@ -84,7 +85,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     if (!facts) return { ...fallback, fallback: "context_budget" };
     const { verified, trace, loop, final, question, fallback: reason } = await runPlannerHarness({
       model, result, facts, evidence, signal, places, rankUnknowns,
-      suggestDeparture: route === planRoute ? (routeId, delay) => suggestDeparture(request, routeId, delay, snapshot) : undefined,
+      suggestDeparture: departure ? (routeId, delay) => departure(request, routeId, delay, snapshot) : undefined,
     });
     return verified
       ? { ...fallback, source: "verified_planner", model: modelProfiles.planner.model, trace, loop, final, clarification: question }

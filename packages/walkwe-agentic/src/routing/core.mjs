@@ -59,18 +59,18 @@ export function findPlace(name) {
   return places.filter(place => [place.name, place.en, ...place.aliases].some(alias => normalize(alias) === query));
 }
 
-function placeMatches(fragment) {
+function placeMatches(fragment, catalog) {
   const query = normalize(fragment);
   const candidates = [];
-  for (const place of places) {
-    for (const name of [place.name, place.en, ...place.aliases]) {
+  for (const place of catalog) {
+    for (const name of [place.name, place.en, ...(place.aliases ?? [])]) {
       const alias = normalize(name);
       for (let index = query.indexOf(alias); index >= 0; index = query.indexOf(alias, index + alias.length)) {
         candidates.push({ id: place.id, index, size: alias.length });
       }
     }
   }
-  for (const name of outsidePilotNames) {
+  for (const name of catalog === places ? outsidePilotNames : []) {
     const alias = normalize(name);
     for (let index = query.indexOf(alias); index >= 0; index = query.indexOf(alias, index + alias.length)) {
       candidates.push({ id: null, index, size: alias.length });
@@ -87,7 +87,7 @@ function placeMatches(fragment) {
   return [...ids];
 }
 
-export function parseIntent(text) {
+export function parseIntent(text, catalog = places) {
   const query = String(text).trim().replace(/[๐-๙]/gu, digit => String(digit.charCodeAt(0) - 0x0E50));
   const markers = [...query.matchAll(routeMarkers)];
   const fields = { from: [], to: [] };
@@ -98,11 +98,11 @@ export function parseIntent(text) {
   const onePlace = fragments => {
     const fragment = fragments.join(" ");
     if (/หรือ|\bor\b/i.test(fragment)) return null;
-    const ids = placeMatches(fragment);
+    const ids = placeMatches(fragment, catalog);
     return ids.length === 1 ? ids[0] : null;
   };
   const prefix = markers[0] ? query.slice(0, markers[0].index) : "";
-  const unmarked = markers.length ? [] : placeMatches(query);
+  const unmarked = markers.length ? [] : placeMatches(query, catalog);
   const time = query.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
   const night = /กลางคืน|ตอนค่ำ|ตอนดึก|ช่วงค่ำ|ตอนเย็น|night|tonight|ทุ่ม/.test(query);
   const hours = { "หนึ่ง": 19, "สอง": 20, "สาม": 21, "สี่": 22, "ห้า": 23 };
@@ -253,6 +253,10 @@ export function planRoute(input, overlays = {}) {
   const { date, instant, mode, access } = trip;
   const paths = routesFrom(from, to, instant, access);
   const routes = paths.map(path => measure(path, mode, overlays, date));
+  return decideCandidates(routes, { mode, time, date, preference, datasetVersion: version });
+}
+
+export function decideCandidates(routes, { mode, time, date, preference, datasetVersion, keepAll = false }) {
   if (!routes.length) return { status: "no_path", decision: "ABSTAIN", mode };
   const shortest = pickRoute(routes, route => route.meters);
   const optimistic = pickRoute(routes, optimisticCost);
@@ -271,10 +275,10 @@ export function planRoute(input, overlays = {}) {
   }
   const recommended = mode === "night" ? (preference === "direct" ? optimistic : pessimistic) : (usefulShade ?? shortest);
   const pool = mode === "night" ? [recommended, shortest, optimistic, pessimistic] : [recommended, shortest, shade];
-  const displayed = [...new Map(pool.map(route => [route.id, route])).values()];
+  const displayed = [...new Map((keepAll ? [recommended, ...routes] : pool).map(route => [route.id, route])).values()];
   return {
     status: "ok", decision: flipped ? "VERIFY" : "ACT", mode, time, date,
-    datasetVersion: version, routes: displayed, recommendedId: recommended.id, shortestId: shortest.id,
+    datasetVersion, routes: displayed, recommendedId: recommended.id, shortestId: shortest.id,
     stress: flipped ? { flipped, optimisticId: optimistic.id, pessimisticId: pessimistic.id, evidenceIds } : { flipped: false },
   };
 }
@@ -284,7 +288,7 @@ export function formatDecision(result, routeId = result.recommendedId) {
   if (!route) return "ยังคำนวณเส้นทางตามเงื่อนไขนี้ไม่ได้ ลองแก้ต้นทาง ปลายทาง หรือเวลาเดิน";
   if (result.mode === "day") return `เดินประมาณ ${route.minutes} นาที คาดว่าโดนแดด ${route.sunMinutes} นาทีที่เวลา ${result.time} น.`;
   const prefix = result.stress.flipped ? "ผลแนะนำขึ้นอยู่กับช่วงที่ยังไม่มีข้อมูลไฟ " : "";
-  return `${prefix}เดินประมาณ ${route.minutes} นาที ช่วงมีข้อมูลว่ามีไฟ ${route.lit} ม. ช่วงไม่มีข้อมูลไฟ ${route.unknown} ม.`;
+  return `${prefix}เดินประมาณ ${route.minutes} นาที ช่วงมีข้อมูลว่ามีไฟ ${Math.round(route.lit)} ม. ช่วงไม่มีข้อมูลไฟ ${Math.round(route.unknown)} ม.`;
 }
 
 export function verifyDecision(proposal, result) {

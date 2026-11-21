@@ -17,7 +17,7 @@ interface Landmark {
   lng: number;
 }
 
-const LANDMARKS: Landmark[] = [
+export const LANDMARKS: readonly Landmark[] = [
   { id: 'osm:W781138575', th: 'สยามพารากอน', en: 'Siam Paragon', alias: ['paragon', 'พารากอน'], lat: 13.74656, lng: 100.53471 },
   { id: 'osm:W25701334', th: 'สยามเซ็นเตอร์', en: 'Siam Center', lat: 13.74627, lng: 100.53284 },
   { id: 'osm:W157770877', th: 'สยามดิสคัฟเวอรี่', en: 'Siam Discovery', lat: 13.74666, lng: 100.53151 },
