@@ -4,6 +4,7 @@ import { ArrowLeft, FlaskConical, Plus } from 'lucide-react';
 import { MAX_CONTACTS, normalisePhone } from '@walkwe/data';
 import { markSetupDone, useContacts } from '../store/contacts.ts';
 import { LangToggle } from '../components/LangToggle.tsx';
+import { LogoMark } from '../components/Logo.tsx';
 import { useI18n } from '../store/i18n.tsx';
 
 interface Row {
@@ -65,8 +66,22 @@ export default function SafetySetup() {
   const canAddRow = contacts.length + rows.length < MAX_CONTACTS;
 
   return (
-    <main className="data-page page-enter setup-page">
-      <div className="page-side">
+    <main className="page-enter setup-page">
+      <div className="setup-hero">
+        <p className="setup-brand">
+          <LogoMark size={40} />
+          Walk We
+        </p>
+        <p className="setup-hero-title">{t('setup.heroTitle')}</p>
+        <p className="setup-hero-copy">
+          {t('setup.heroDay')}
+          <br />
+          {t('setup.heroNight')}
+        </p>
+        <img className="setup-avatar" src="/art/walkwe-setup-avatar.webp" alt="" width={180} height={180} />
+        <p className="setup-hero-location">{t('setup.heroLocation')}</p>
+      </div>
+      <div className="setup-content">
         <header className="flow-top">
           <button
             type="button"
@@ -82,9 +97,7 @@ export default function SafetySetup() {
           <LangToggle />
         </header>
         <h1 className="h1">{t('setup.title')}</h1>
-        <p className="sub">{t('setup.intro')}</p>
-      </div>
-      <div className="page-body">
+        <p className="sub setup-intro">{t('setup.intro')}</p>
         <form className="contact-form setup-form" onSubmit={save} noValidate>
           <div className="form-panel">
             <label className="field">

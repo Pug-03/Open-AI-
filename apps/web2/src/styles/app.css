@@ -1509,9 +1509,6 @@ textarea {
     background: var(--surface-2);
   }
 }
-.setup-page .h1 {
-  margin-top: var(--space-5);
-}
 .data-page .sub {
   margin-top: var(--space-3);
   max-width: 60ch;
@@ -1582,6 +1579,163 @@ textarea {
 }
 
 /* Safety setup */
+.setup-page {
+  --bg: #eef4ff;
+  --ink: #050b1a;
+  --text: var(--ink);
+  --heading: var(--ink);
+  --rule: var(--ink);
+  --surface-2: #ece9ff;
+  --primary-bg: #493f9d;
+  --accent: var(--primary-bg);
+  --accent-soft: var(--surface-2);
+  --focus: var(--primary-bg);
+  --border: #bfcee1;
+  min-height: 100dvh;
+  position: relative;
+  background: var(--bg);
+  color: var(--text);
+}
+[data-theme='night'] .setup-page {
+  --bg: #050b1a;
+  --ink: #eef4ff;
+  --surface: #171a3b;
+  --surface-2: #22204a;
+  --primary-bg: #3cc8f2;
+  --primary-text: var(--bg);
+  --border: #526687;
+}
+.setup-hero {
+  isolation: isolate;
+  position: relative;
+  min-block-size: min(19rem, 78vw);
+  overflow: hidden;
+  padding: calc(4.5rem + var(--safe-t)) calc(var(--space-5) + var(--safe-r)) 6.25rem calc(var(--space-5) + var(--safe-l));
+  background: #050b1a;
+  color: #eef4ff;
+}
+.setup-hero::before,
+.setup-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(140deg, rgb(5 11 26 / 0.84), rgb(5 11 26 / 0.12) 72%), var(--setup-art) 50% 43% / cover;
+}
+.setup-hero::before {
+  --setup-art: url('/art/walkwe-setup-guide.webp');
+}
+.setup-hero::after {
+  content: none;
+}
+.setup-brand {
+  position: absolute;
+  inset-block-start: calc(0.85rem + var(--safe-t));
+  inset-inline-start: calc(3.5rem + var(--safe-l));
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.25;
+  font-weight: 700;
+}
+.setup-brand .logo-mark {
+  width: 28px;
+  height: 28px;
+}
+.setup-hero-title {
+  margin: 0;
+  font-size: clamp(1.625rem, 6.9vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.18;
+}
+.setup-hero-copy {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.setup-avatar {
+  position: absolute;
+  inset-block-end: 1.6rem;
+  inset-inline-start: calc(0.8rem + var(--safe-l));
+  width: clamp(4.5rem, 25vw, 6.5rem);
+  height: auto;
+  pointer-events: none;
+}
+.setup-hero-location {
+  display: none;
+}
+/* Keep the automatic gesture under five seconds so it can settle at rest. */
+@media (prefers-reduced-motion: no-preference) {
+  .setup-hero::after {
+    --setup-art: url('/art/walkwe-setup-guide-point.webp');
+    content: '';
+    opacity: 0;
+    animation: setup-guide-point 2.4s ease-in-out 2;
+  }
+  .setup-avatar {
+    animation: setup-avatar-lift 2.4s ease-in-out 2;
+  }
+}
+@keyframes setup-guide-point {
+  0%, 12%, 80%, 100% { opacity: 0; }
+  32%, 60% { opacity: 1; }
+}
+@keyframes setup-avatar-lift {
+  0%, 12%, 80%, 100% { transform: translateY(0); }
+  32%, 60% { transform: translate(4px, -8px) rotate(-4deg); }
+}
+.setup-content {
+  isolation: isolate;
+  margin-block-start: calc(-1 * var(--space-5));
+  padding: var(--space-5) calc(var(--space-5) + var(--safe-r)) calc(var(--space-8) + var(--safe-b)) calc(var(--space-5) + var(--safe-l));
+  border-radius: 24px 24px 0 0;
+  background: var(--bg);
+}
+.setup-content .flow-top {
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+}
+.setup-content .flow-top .setup-back {
+  margin: 0;
+}
+.setup-content .lang-toggle {
+  width: 76px;
+  border-radius: var(--radius-sm);
+  border-color: currentColor;
+  background: var(--surface);
+  color: var(--text);
+}
+.setup-content .lang-toggle svg {
+  display: none;
+}
+.setup-content .lang-toggle::after {
+  content: 'TH / EN';
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.setup-content .h1 {
+  text-wrap: wrap;
+}
+.setup-intro {
+  max-width: 45ch;
+  margin-top: var(--space-2);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.setup-form .form-panel {
+  border-radius: var(--radius);
+}
+.setup-form .field input,
+.setup-form > .setup-demo .btn,
+.setup-form .btn--add,
+.setup-actions .btn--primary {
+  border-radius: var(--radius-sm);
+}
 .setup-existing {
   display: grid;
   gap: var(--space-1);
@@ -1600,6 +1754,7 @@ textarea {
 }
 .setup-form .btn--add {
   margin-top: var(--space-4);
+  background: var(--bg);
 }
 .setup-actions {
   display: grid;
@@ -1608,6 +1763,7 @@ textarea {
 }
 .setup-actions .btn--text {
   justify-self: center;
+  text-decoration: none;
 }
 .setup-later {
   text-align: center;
@@ -1615,18 +1771,128 @@ textarea {
 /* Judges' demo entry, set apart below the setup panel. */
 .setup-demo {
   margin-top: var(--space-6);
-  padding-top: var(--space-6);
-  border-top: var(--hair) dashed var(--text-dim);
   display: grid;
   gap: var(--space-2);
-  text-align: center;
   color: var(--text-dim);
 }
-@media (min-width: 600px) {
+.setup-demo > p {
+  text-align: center;
+}
+@media (max-width: 959px) {
+  .setup-content .flow-top {
+    --focus: #3cc8f2;
+    position: absolute;
+    inset-block-start: calc(var(--space-1) + var(--safe-t));
+    inset-inline: calc(var(--space-2) + var(--safe-l)) calc(var(--space-4) + var(--safe-r));
+  }
+  .setup-content .flow-top .setup-back,
+  .setup-content .flow-top .lang-toggle {
+    color: #eef4ff;
+    background: rgb(5 11 26 / 0.64);
+  }
+  .setup-content .setup-form .btn--add,
+  .setup-content .setup-demo .btn {
+    min-height: var(--tap);
+    padding-block: var(--space-2);
+  }
+}
+@media (max-width: 959px) and (max-height: 760px) {
+  .setup-hero {
+    min-block-size: 11.5rem;
+    padding-block-end: 2.5rem;
+  }
+  .setup-avatar {
+    inset-block-end: 1.1rem;
+    inset-inline-start: auto;
+    inset-inline-end: calc(var(--space-3) + var(--safe-r));
+    width: 4.25rem;
+  }
+  .setup-hero-title {
+    font-size: 1.625rem;
+  }
+  .setup-hero-copy {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  .setup-content,
+  .setup-actions {
+    padding-block-start: var(--space-3);
+  }
+  .setup-actions {
+    margin-block-start: 0;
+  }
   .setup-demo {
-    border-top: 0;
-    padding-top: 0;
-    margin-top: var(--space-4);
+    margin-block-start: var(--space-3);
+  }
+}
+@media (min-width: 960px) {
+  .setup-page {
+    display: grid;
+    grid-template-columns: minmax(0, 49.375fr) minmax(0, 50.625fr);
+  }
+  .setup-hero {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    min-block-size: max(100dvh, 34rem);
+    padding: calc(3.25rem + var(--safe-t)) clamp(2rem, 4.1vw, 4.5rem) 12rem;
+  }
+  .setup-hero::before,
+  .setup-hero::after {
+    background-position: center;
+  }
+  .setup-brand {
+    position: static;
+    gap: var(--space-4);
+    font-size: 1.5rem;
+  }
+  .setup-brand .logo-mark {
+    width: 40px;
+    height: 40px;
+  }
+  .setup-hero-title {
+    margin-top: var(--space-5);
+    font-size: clamp(2.125rem, 4.25vw, 3.5rem);
+  }
+  .setup-hero-copy {
+    margin-top: var(--space-3);
+    font-size: 1.125rem;
+  }
+  .setup-avatar {
+    inset-block-end: 3rem;
+    inset-inline-start: clamp(2rem, 3.1vw, 3.5rem);
+    width: clamp(7.5rem, 14vw, 11.25rem);
+  }
+  .setup-hero-location {
+    display: block;
+    position: absolute;
+    inset-block-end: 2.9rem;
+    inset-inline-start: clamp(2rem, 4.1vw, 4.5rem);
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+  .setup-content {
+    margin: 0;
+    padding: calc(2.15rem + var(--safe-t)) calc(clamp(1.75rem, 5.3vw, 5rem) + var(--safe-r)) calc(var(--space-10) + var(--safe-b)) clamp(1.75rem, 4vw, 4.25rem);
+    border-radius: 0;
+  }
+  .setup-content .flow-top {
+    margin-bottom: var(--space-5);
+  }
+  .setup-content .h1 {
+    font-size: clamp(1.875rem, 2.8vw, 2.5rem);
+  }
+  .setup-form {
+    margin-top: var(--space-8);
+  }
+  .setup-form .form-panel {
+    padding: clamp(1.25rem, 2.2vw, 2rem);
+    border-top: var(--hair) solid var(--border);
+    border-radius: 22px;
+  }
+  .setup-demo > p {
+    text-align: start;
   }
 }
 
@@ -1764,17 +2030,6 @@ textarea {
     gap: var(--space-5);
     padding-bottom: var(--space-5);
   }
-  .setup-page .flow-top {
-    border-bottom: 0;
-    padding-bottom: 0;
-    min-height: var(--tap);
-    margin-bottom: var(--space-5);
-  }
-  .setup-page .h1 {
-    margin-top: 0;
-    padding-bottom: var(--space-5);
-    border-bottom: var(--frame) solid var(--rule);
-  }
   .page-side .h1,
   .page-side .h2 {
     font-size: clamp(2rem, 3vw, 2.75rem);
@@ -1802,7 +2057,6 @@ textarea {
     margin-top: 0;
   }
   /* Language toggle sits top-right of the window, level with the back arrow. */
-  .setup-page .flow-top .lang-toggle,
   .data-head .lang-toggle {
     /* Positioned within the page column (its entrance transform makes it the
        containing block), so step back out by the column's side margin to
