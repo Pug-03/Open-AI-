@@ -2,9 +2,6 @@ import { Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { lazyPage, preloadPages } from './lazyPage.ts';
 import Landing from './pages/Landing.tsx';
-// The planner is the first screen for returning users ("/" redirects
-// there), so it ships in the main bundle too; MapLibre stays a separate chunk.
-import Plan from './pages/Plan.tsx';
 import { SosButton } from './components/sos/SosButton.tsx';
 import { ScrollManager } from './components/ScrollManager.tsx';
 import { loadSession } from './nav/session.ts';
@@ -12,11 +9,10 @@ import { hasOnboarded, resetFirstRun } from './store/onboarding.ts';
 import { hasDoneSetup } from './store/contacts.ts';
 import { useFullscreenKey } from './utils/useFullscreenKey.ts';
 
-// Landing ships in the main bundle so first visits paint fast; the rest are
-// chunks (same split as DeePer). The map library is a further chunk inside
-// Plan, so even the plan screen's shell paints before MapLibre arrives.
+// The welcome page paints before loading the planner or the map library.
 
 const Navigate_ = lazyPage(() => import('./pages/Navigate.tsx'));
+const Plan = lazyPage(() => import('./pages/Plan.tsx'), { preload: false });
 const DataLimits = lazyPage(() => import('./pages/DataLimits.tsx'));
 const Contacts = lazyPage(() => import('./pages/Contacts.tsx'));
 const Privacy = lazyPage(() => import('./pages/Privacy.tsx'));
@@ -46,7 +42,9 @@ function PageSkeleton() {
 }
 
 export default function App() {
-  useEffect(preloadPages, []);
+  useEffect(() => {
+    if (hasOnboarded() && location.pathname !== '/welcome') preloadPages();
+  }, []);
   useFullscreenKey();
   return (
     <>

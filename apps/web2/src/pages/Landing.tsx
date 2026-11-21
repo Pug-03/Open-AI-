@@ -54,13 +54,16 @@ export default function Landing() {
   // worker (the same data the planner routes on), after the first paint.
   useEffect(() => {
     let live = true;
-    const id = window.setTimeout(() => {
+    const load = () => {
       routing.scene(PLAN_BBOX).then((s) => live && setPrepared(prepareScene(s)), () => live && setFailed(true));
       routing.warm().then((m) => live && setMeta(m), () => {});
-    }, 60);
+    };
+    const idle = typeof window.requestIdleCallback === 'function';
+    const id = idle ? window.requestIdleCallback(load, { timeout: 800 }) : window.setTimeout(load, 120);
     return () => {
       live = false;
-      window.clearTimeout(id);
+      if (idle) window.cancelIdleCallback(id);
+      else window.clearTimeout(id);
     };
   }, []);
 

@@ -1,11 +1,10 @@
-import { shadowDirection, shadowLength, type Route, type SunPosition } from '@walkwe/core';
+import { MAX_SHADOW_M, shadowDirection, type Route, type SunPosition } from '@walkwe/core';
 import type { PlanScene } from '../../routing/protocol.ts';
 
 // The shadow plan: the pilot area's real building footprints drawn as an
 // architect's site plan, with the shadows the engine's own geometry gives
 // for one sun position (shadow = footprint swept along the sun's bearing by
-// h / tan(altitude), the same rule ShadeScene routes with). Canvas 2D: a few
-// thousand polygons redraw comfortably every frame while the time is dragged.
+// h / tan(altitude), the same rule ShadeScene routes with).
 
 export interface Camera {
   /** Centre of the view, metres east/north of the scene origin. */
@@ -162,18 +161,19 @@ export function drawPlan(ctx: CanvasRenderingContext2D, P: PreparedScene, f: Pla
   // shadows do not add up to a darker patch. All pieces wind the same way.
   if (sun.altitude > 0.5) {
     const d = shadowDirection(sun);
+    const shadowPerMetre = 1 / Math.tan((sun.altitude * Math.PI) / 180);
     const fade = smooth(0.5, 7, sun.altitude);
     ctx.fillStyle = mix(DAY.shadow, NIGHT.shadow, n, 0.3 * fade * (1 - n * 0.6));
     ctx.beginPath();
     const count = P.rings.length;
     for (let i = 0; i < count; i++) {
-      const l1 = shadowLength(P.h[i]!, sun.altitude);
+      const l1 = Math.min(P.h[i]! * shadowPerMetre, MAX_SHADOW_M);
       const ox = d.x * l1, oy = d.y * l1;
       const b = i * 4;
       // Skip buildings whose shadow cannot reach the view.
       if (Math.max(P.boxes[b + 2]!, P.boxes[b + 2]! + ox) < vx0 || Math.min(P.boxes[b]!, P.boxes[b]! + ox) > vx1) continue;
       if (Math.max(P.boxes[b + 3]!, P.boxes[b + 3]! + oy) < vy0 || Math.min(P.boxes[b + 1]!, P.boxes[b + 1]! + oy) > vy1) continue;
-      const l0 = P.minH[i]! > 0 ? shadowLength(P.minH[i]!, sun.altitude) : 0;
+      const l0 = Math.min(Math.max(0, P.minH[i]!) * shadowPerMetre, MAX_SHADOW_M);
       const nx = d.x * l0, ny = d.y * l0;
       const r = P.rings[i]!;
       const ccw = P.turn[i]! > 0;
@@ -187,12 +187,13 @@ export function drawPlan(ctx: CanvasRenderingContext2D, P: PreparedScene, f: Pla
         for (let j = last - 2; j >= 0; j -= 2) ctx.lineTo(X(r[j]! + ox), Y(r[j + 1]! + oy));
       }
       ctx.closePath();
-      // One quad per wall, turned counter-clockwise too.
+      // The far footprint and the trailing edges cover the swept area. The
+      // leading edges only overlap it, so they need no extra path commands.
       const vx = ox - nx, vy = oy - ny;
       for (let j = 0; j + 3 < r.length; j += 2) {
         const ax = r[j]! + nx, ay = r[j + 1]! + ny, bx = r[j + 2]! + nx, by = r[j + 3]! + ny;
         const cross = (bx - ax) * vy - (by - ay) * vx;
-        if (cross === 0) continue;
+        if (cross * P.turn[i]! <= 0) continue;
         if (cross > 0) {
           ctx.moveTo(X(ax), Y(ay)); ctx.lineTo(X(bx), Y(by)); ctx.lineTo(X(bx + vx), Y(by + vy)); ctx.lineTo(X(ax + vx), Y(ay + vy));
         } else {
