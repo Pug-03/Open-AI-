@@ -8,39 +8,54 @@ import { modelProfiles, objectSchema, stringEnum } from "../integrations/openai.
 const allowedModes = ["day", "night", "auto"];
 const timeFormat = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const placeValue = { type: ["string", "null"] };
-const intentSchema = objectSchema({
-  from: placeValue, to: placeValue, mode: { type: ["string", "null"], enum: [...allowedModes, null] },
-  time: placeValue, noStairs: { type: "boolean" },
-});
 const companionSchema = objectSchema({ action: stringEnum("silent", "warn", "offer_replan") });
 const noticeLimit = agentConfig.companionMaxWarnings;
 const stateError = reason => ({ status: reason, decision: "ABSTAIN", routes: [] });
 
 export function createWorkflows({ model = null, route = planRoute, localIntent = parseIntent, places = fixturePlaces } = {}) {
   const placeIds = new Set(places.map(place => place.id));
+  const catalogueId = { ...placeValue, enum: [...placeIds, null] };
+  const intentSchema = objectSchema({
+    from: catalogueId, to: catalogueId, mode: { type: ["string", "null"], enum: [...allowedModes, null] },
+    time: placeValue, noStairs: { type: "boolean" },
+  });
 
   async function intent({ text, useModel = false }) {
     if (typeof text !== "string" || !text.trim() || text.length > 500) return { status: "invalid" };
     const localDraft = localIntent(text);
-    const context = useModel && model ? intentContext(text, places) : null;
+    const explicitPlaces = localIntent === parseIntent && hasRouteMarkers(text);
+    const from = placeIds.has(localDraft.from) ? localDraft.from : null;
+    const to = placeIds.has(localDraft.to) ? localDraft.to : null;
+    const explicitFields = {
+      ...(timeFormat.test(localDraft.time) ? { time: localDraft.time } : {}),
+      ...(localDraft.mode === "day" || localDraft.mode === "night" ? { mode: localDraft.mode } : {}),
+      ...(localDraft.noStairs === true ? { noStairs: true } : {}),
+    };
+    const context = useModel && model ? intentContext(text, places,
+      { ...explicitFields, ...(explicitPlaces ? { from, to } : {}) }) : null;
+    let fallback = useModel && model ? "intent_context_budget" : null;
     if (context) {
+      const signal = AbortSignal.timeout(agentConfig.intentTimeoutMs);
       try {
         const draft = await model.structured("intent", {
           instructions: instructions.intent, input: JSON.stringify(context),
-          schema: intentSchema, signal: AbortSignal.timeout(5000),
+          schema: intentSchema, signal,
         });
-        const explicitPlaceConflict = localIntent === parseIntent && hasRouteMarkers(text)
-          && (draft?.from !== localDraft.from || draft?.to !== localDraft.to);
-        if (validIntent(draft, placeIds) && !explicitPlaceConflict) {
-          return { status: "confirm", source: modelProfiles.intent.model, draft };
+        if (!validIntent(draft, placeIds, intentSchema.required)) {
+          fallback = "intent_invalid_draft";
+        } else if (explicitPlaces && (draft.from !== from || draft.to !== to)) {
+          fallback = "intent_place_conflict";
+        } else {
+          return { status: "confirm", source: modelProfiles.intent.model, draft: { ...draft, ...explicitFields } };
         }
       } catch {
-        // The same form can still confirm a locally parsed draft.
+        fallback = signal.aborted ? "intent_deadline" : "intent_model_error";
       }
     }
     return {
       status: "confirm", source: "system",
-      draft: { ...localDraft, from: placeIds.has(localDraft.from) ? localDraft.from : null, to: placeIds.has(localDraft.to) ? localDraft.to : null },
+      draft: { ...localDraft, from, to },
+      ...(fallback ? { fallback } : {}),
     };
   }
 
@@ -105,9 +120,9 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
   return { intent, plan, companion };
 }
 
-function validIntent(value, placeIds) {
-  return value && Object.keys(value).length === intentSchema.required.length
-    && intentSchema.required.every(key => Object.hasOwn(value, key))
+function validIntent(value, placeIds, fields) {
+  return value && Object.keys(value).length === fields.length
+    && fields.every(key => Object.hasOwn(value, key))
     && [value.from, value.to].every(place => place === null || placeIds.has(place))
     && (value.time === null || (typeof value.time === "string" && timeFormat.test(value.time)))
     && (value.mode === null || allowedModes.includes(value.mode)) && typeof value.noStairs === "boolean";

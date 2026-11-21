@@ -7,6 +7,7 @@ export const agentConfig = Object.freeze({
   departureShiftStepMinutes: 5,
   maxDepartureShiftMinutes: 30,
   nightRoutingAltitude: 0,
+  intentTimeoutMs: 8_000,
   plannerMaxTools: 8,
   plannerMaxSteps: 6,
   plannerMaxQuestions: 1,

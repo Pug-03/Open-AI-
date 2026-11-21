@@ -72,6 +72,28 @@ test("Intent returns confirmable local draft when a model invents a place", asyn
   assert.deepEqual(response.draft, { from: "siam", to: "central", time: "21:00", mode: "night", noStairs: true });
 });
 
+test("Intent supplies an explicit out-of-coverage slot and constrains the model to catalogue IDs", async () => {
+  const engine = createWorkflows({ model: { structured: async (_, { input, schema }) => {
+    assert.deepEqual(JSON.parse(input).local_fields, { from: "siam", to: null, time: "13:00" });
+    assert.ok(schema.properties.to.enum.includes(null));
+    assert.ok(schema.properties.to.enum.includes("central"));
+    assert.ok(!schema.properties.to.enum.includes("airport"));
+    return { from: "siam", to: null, time: "13:00", mode: null, noStairs: false };
+  } } });
+  const result = await engine.intent({ text: "จากสยามไปสนามบิน เวลา 13:00", useModel: true });
+  assert.equal(result.source, "gpt-6.1-terra");
+  assert.deepEqual(result.draft, { from: "siam", to: null, time: "13:00", mode: null, noStairs: false });
+});
+
+test("Intent preserves explicit Thai time, night mode and a stair restriction when the model misses them", async () => {
+  const engine = createWorkflows({ model: { structured: async () => ({
+    from: "siam", to: "chitlom", time: "03:30", mode: null, noStairs: false,
+  }) } });
+  const result = await engine.intent({ text: "สามทุ่มครึ่งจากสยามไปชิดลม เลี่ยงบันได", useModel: true });
+  assert.equal(result.source, "gpt-6.1-terra");
+  assert.deepEqual(result.draft, { from: "siam", to: "chitlom", time: "21:30", mode: "night", noStairs: true });
+});
+
 test("Planner must read stress evidence and get a Critic verdict before verified finish", async () => {
   const result = replay();
   const calls = nightCalls(result);
