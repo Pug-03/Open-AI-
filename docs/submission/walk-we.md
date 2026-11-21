@@ -3,7 +3,7 @@
 **เดินร่มกว่าตอนกลางวัน เดินปลอดภัยกว่าตอนกลางคืน (ตามข้อมูลที่มี)**
 
 - **Track:** 5. Smart Mobility & Cities (พัฒนาการเดินทาง สร้างเมืองอัจฉริยะ)
-- **ทีม:** หมูกรอบกับหมาไส้กรอกตะลุยอวกาศ
+- **ทีม:** Dev
 - **ลองใช้:** https://walkwe-web.walkwe.workers.dev (เปิดบนมือถือ)
 
 Walk We เป็นแอปมือถือ (PWA) ที่เลือกเส้นทางเดินเท้าตามช่วงเวลาและข้อมูลของเมือง
@@ -121,7 +121,7 @@ Walk We เป็นแอปมือถือ (PWA) ที่เลือก�
 
 ระยะ 2–3 จะทำต่อเมื่อผลของระยะก่อนหน้าผ่านเกณฑ์ตัวชี้วัด
 
-## 12. ทีม หมูกรอบกับหมาไส้กรอกตะลุยอวกาศ
+## 12. ทีม Dev
 
 - **Siriphanaphorn Sirikun** — Team Lead / Developer · Thailand Cyber Top Talent 2026 อันดับ 1 (Senior), GLO Innovation 2026 อันดับ 1 จาก 173 ทีม
 - **Krittithee Kankanpinchote** — AI Engineer / Developer · AI & Robotics Hackathon 2025 (MIT Media Lab) Top 3 Global Finalist, Thailand Metaverse Hackathon 2026 อันดับ 1

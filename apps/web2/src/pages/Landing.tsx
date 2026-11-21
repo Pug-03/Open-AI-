@@ -169,7 +169,7 @@ export default function Landing() {
           </div>
           <div>
             <dt>{c('foot.by')}</dt>
-            <dd>หมูกรอบกับหมาไส้กรอกตะลุยอวกาศ</dd>
+            <dd>Dev</dd>
           </div>
           <div>
             <dt>© 2569 Walk We</dt>

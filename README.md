@@ -3,7 +3,7 @@
 Mobile-first PWA that recommends walking routes in central Bangkok around Siam
 (walks up to 5 km): shadier by day, safer by night (based on available data).
 
-The Walk We team is **หมูกรอบกับหมาไส้กรอกตะลุยอวกาศ**. The current members are
+The Walk We team is **Dev**. The current members are
 Nathaporn Saituptim (Team Lead / Developer), Natchapon Thiradechanun (AI Engineer / Developer),
 and Siriphanaphorn Sirikun (Support).
 
