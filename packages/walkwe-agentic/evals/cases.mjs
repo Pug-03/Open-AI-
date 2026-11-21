@@ -366,17 +366,23 @@ export function liveCases(model) {
   const engine = createWorkflows({ model });
   return [
     ...intentRows.filter(([id]) => ["I01", "I02", "I03", "I04", "I05", "I07", "I10", "I11", "I15", "I17"].includes(id))
-      .map(([id, text, expected]) => ({ id: `L-${id}`, lane: "live", group: "intent", run: async () => {
-        const result = await engine.intent({ text, useModel: true });
-        assert.equal(result.source, "gpt-6.1-terra", "intent.source");
-        checkFields(result.draft, expected);
-        return result;
-      }})),
-    ...[night, day].map(request => ({ id: `L-${request.mode}`, lane: "live", group: "harness", run: async () => {
-      const result = await engine.plan(request, { useModel: true });
-      assert.equal(result.source, "verified_planner", result.fallback ?? "planner.source");
-      assert.equal(result.decision, request.mode === "night" ? "VERIFY" : "ACT", "planner.decision");
-      return result;
-    }})),
+      .map(([id, text, expected]) => ({
+        id: `L-${id}`, lane: "live", group: "intent",
+        run: () => engine.intent({ text, useModel: true }),
+        check(result) {
+          assert.equal(result.source, "gpt-6.1-terra", "intent.source");
+          checkFields(result.draft, expected);
+        },
+      })),
+    ...[night, day].map(request => ({
+      id: `L-${request.mode}`, lane: "live", group: "harness",
+      run: () => engine.plan(request, { useModel: true }),
+      check(result) {
+        assert.equal(result.source, "verified_planner", "planner.source");
+        assert.equal(result.decision, request.mode === "night" ? "VERIFY" : "ACT", "planner.decision");
+        assert.ok(result.trace.some(entry => entry.step === "critic" && entry.passed), "planner.critic");
+        assert.ok(result.loop.plannerSteps < 6, "planner.round_trips");
+      },
+    })),
   ];
 }

@@ -43,12 +43,11 @@ for (const test of [...localCases, ...selected]) {
   const firstCall = calls.length;
   const firstRequest = requests.length;
   const row = { id: test.id, lane: test.lane, group: test.group, trap: Boolean(test.trap) };
+  let result;
   try {
-    const result = await test.run();
-    records.push({ ...row, passed: true, elapsedMs: Math.round(performance.now() - started),
-      ...(result?.fallback ? { fallback: result.fallback } : {}),
-      ...(result?.loop ? { loop: result.loop } : {}),
-    });
+    result = await test.run();
+    test.check?.(result);
+    records.push({ ...row, passed: true, elapsedMs: Math.round(performance.now() - started) });
   } catch (error) {
     records.push({ ...row, passed: false, elapsedMs: Math.round(performance.now() - started),
       failure: error.code ?? error.name,
@@ -59,10 +58,19 @@ for (const test of [...localCases, ...selected]) {
       } : {}) });
     process.stderr.write(`${test.id} ${test.name ?? test.group}: ${error.message}\n`);
   }
+  const record = records.at(-1);
+  if (result?.fallback) record.fallback = result.fallback;
+  if (result?.loop) record.loop = result.loop;
   if (test.lane === "live") {
     const round = calls.slice(firstCall);
-    records.at(-1).usage = { ...summarizeUsage(round), calls: round };
-    records.at(-1).requests = requests.slice(firstRequest);
+    record.usage = { ...summarizeUsage(round), calls: round };
+    record.requests = requests.slice(firstRequest);
+    if (result?.trace) {
+      record.trace = result.trace.map(({ step, status, passed, checks, via }) => ({
+        step, status, passed, via,
+        ...(checks ? { failedChecks: checks.filter(check => !check.passed).map(check => check.id) } : {}),
+      }));
+    }
   }
 }
 
