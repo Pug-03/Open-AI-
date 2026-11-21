@@ -35,7 +35,7 @@ export interface ArrivalWatch {
 /** 128-bit random token, base64url (22 chars). Works in browsers and Node. */
 export function shareToken(bytes = 16): string {
   const b = new Uint8Array(bytes);
-  globalThis.crypto.getRandomValues(b);
+  crypto.getRandomValues(b);
   let s = '';
   for (const x of b) s += String.fromCharCode(x);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

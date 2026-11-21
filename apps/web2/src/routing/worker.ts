@@ -4,13 +4,13 @@ import { type AreaRouter, LocalProjection, modeForTime, RoutingError, sunPositio
 import { areaDatasetSchema, incidentsDatasetSchema, JsonRepository, withoutPlaceholders, type IncidentsDataset } from '@walkwe/data';
 import type { DatasetMeta, FromWorker, HourShade, LayerInfo, PlanScene, ToWorker } from './protocol.ts';
 import type { AreaDataset } from '@walkwe/data';
-import { createPilotRouter } from './pilotRouter.ts';
+import { createPilotRouter, pilotSnapshotInput } from './pilotRouter.ts';
 
 // Loads the pilot dataset once, builds the graph, and answers route requests
 // off the UI thread so the sheet and map stay smooth while A* runs.
 
 const repo = new JsonRepository({ baseUrl: '/data/' });
-let ready: Promise<{ router: AreaRouter; meta: DatasetMeta; ds: AreaDataset }> | null = null;
+let ready: Promise<{ router: AreaRouter; meta: DatasetMeta; ds: AreaDataset; version?: Promise<string | undefined> }> | null = null;
 
 function load() {
   ready ??= Promise.all([
@@ -58,7 +58,12 @@ function load() {
       malls: { total: L.malls.items.length, withHours: L.malls.items.filter((m) => m.hours).length },
       incidents: { total: inc?.items.length ?? 0, placeholders: inc?.items.filter((i) => i.placeholder).length ?? 0 },
     };
-    return { router, meta, ds };
+    const version = inc0 && globalThis.crypto?.subtle
+      ? crypto.subtle.digest('SHA-256', new TextEncoder().encode(pilotSnapshotInput(ds, withoutPlaceholders(inc0))))
+        .then(digest => `web2:${[...new Uint8Array(digest).slice(0, 12)].map(byte => byte.toString(16).padStart(2, '0')).join('')}`)
+        .catch(() => undefined)
+      : undefined;
+    return { router, meta, ds, version };
   });
   ready.catch(() => (ready = null)); // allow a retry after a network failure
   return ready;
@@ -118,7 +123,7 @@ const post = (msg: FromWorker) => (self as unknown as DedicatedWorkerGlobalScope
 self.onmessage = async (e: MessageEvent<ToWorker>) => {
   const msg = e.data;
   try {
-    const { router, meta, ds } = await load();
+    const { router, meta, ds, version } = await load();
     if (msg.type === 'warm') return post({ id: msg.id, type: 'ready', meta });
     if (msg.type === 'scene') return post({ id: msg.id, type: 'scene', scene: planScene(ds, msg.bbox) });
     if (msg.type === 'hourly') {
@@ -140,7 +145,8 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       return post({ id: msg.id, type: 'hourly', hours });
     }
     const result = router.routeSync({ ...msg.request, departAt: new Date(msg.request.departAt) }, msg.withEvidence);
-    post({ id: msg.id, type: 'result', result });
+    const datasetVersion = msg.withEvidence ? await version : undefined;
+    post({ id: msg.id, type: 'result', result: { ...result, ...(datasetVersion ? { datasetVersion } : {}) } });
   } catch (err) {
     if (err instanceof RoutingError) post({ id: msg.id, type: 'error', reason: err.reason, message: err.message });
     else post({ id: msg.id, type: 'error', reason: ready ? 'internal' : 'data', message: String((err as Error)?.message ?? err) });

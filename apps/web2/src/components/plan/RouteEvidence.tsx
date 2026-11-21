@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Route, WalkMode } from '@walkwe/core';
 import { env } from '../../env.ts';
+import { ResearchSegment } from './ResearchSegment.tsx';
 import { useI18n } from '../../store/i18n.tsx';
 import { evidenceKinds, groupEvidence, type EvidenceRow } from './routeEvidence.ts';
 
-export function RouteEvidence({ route, shortest, mode }: { route: Route; shortest: Route; mode: WalkMode }) {
+export function RouteEvidence({ route, shortest, mode, datasetVersion }: { route: Route; shortest: Route; mode: WalkMode; datasetVersion?: string | undefined }) {
   const { t } = useI18n();
   const selected = route.evidence ?? [];
   const rows = groupEvidence(selected, shortest === route ? [] : shortest.evidence ?? [], mode);
@@ -80,6 +81,9 @@ export function RouteEvidence({ route, shortest, mode }: { route: Route; shortes
         </button>
       )}
       {status === 'fallback' && <p className="small" role="status">{t('evidence.fallback')}</p>}
+      {mode === 'night' && env.voiceProxyUrl && datasetVersion && (
+        <ResearchSegment key={datasetVersion} proxyUrl={env.voiceProxyUrl} datasetVersion={datasetVersion} segments={selected} />
+      )}
     </section>
   );
 }

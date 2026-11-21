@@ -104,3 +104,6 @@ export function createSosController(o: SosOptions): SosController {
     },
   };
 }
+
+/** Voice can open the existing help sheet without starting a relay attempt. */
+export const OPEN_SOS_VOICE = 'ww:open-sos-voice';

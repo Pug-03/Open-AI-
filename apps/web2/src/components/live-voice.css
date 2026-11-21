@@ -1,0 +1,112 @@
+.live-voice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--hair) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.live-voice-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: clamp(3rem, 16vw, 4rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface-2);
+}
+
+.live-voice-avatar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: var(--hair) solid var(--accent);
+  border-radius: inherit;
+  opacity: 0;
+  transform: scale(.94);
+  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+
+.live-voice-avatar img {
+  position: relative;
+  inline-size: 100%;
+  block-size: auto;
+  transform: translateY(2%);
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.live-voice:is([data-voice-phase='ready'], [data-voice-phase='awaiting'], [data-voice-phase='speaking'], [data-voice-phase='unavailable']) .live-voice-avatar::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.live-voice:is([data-voice-phase='starting'], [data-voice-phase='working']) .live-voice-avatar::before {
+  opacity: 1;
+  border-style: dashed;
+  transform: scale(1.06);
+}
+
+.live-voice[data-voice-phase='working'] .live-voice-avatar img {
+  transform: translateY(-4%) rotate(-5deg);
+}
+
+.live-voice[data-voice-phase='speaking'] .live-voice-avatar img {
+  transform: translateY(-4%) rotate(4deg) scale(1.06);
+}
+
+.live-voice[data-voice-phase='awaiting'] .live-voice-avatar img {
+  transform: translateY(-2%) rotate(4deg);
+}
+
+.live-voice[data-voice-phase='ready'] .live-voice-avatar img {
+  transform: translateY(-3%);
+}
+
+.live-voice-copy {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.live-voice-copy p {
+  margin: 0;
+}
+
+.live-voice-title {
+  color: var(--heading);
+  font-weight: 700;
+}
+
+.live-voice-status {
+  color: var(--text);
+}
+
+.live-voice-example {
+  color: var(--text-dim);
+}
+
+.live-voice-button {
+  gap: var(--space-2);
+  max-inline-size: 100%;
+  margin-block-start: var(--space-1);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-3);
+  text-align: start;
+}
+
+.live-voice-button svg {
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-voice[data-voice-phase] .live-voice-avatar img,
+  .live-voice[data-voice-phase] .live-voice-avatar::before {
+    transform: none;
+    transition-property: opacity;
+  }
+}

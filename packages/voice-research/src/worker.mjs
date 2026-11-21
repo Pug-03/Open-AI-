@@ -1,5 +1,6 @@
 const route = "/agents/research";
 const segmentPattern = /^[a-z0-9][a-z0-9_.:-]{0,95}$/i;
+const versionPattern = /^[a-z0-9][a-z0-9_.:-]{0,95}$/i;
 const jobPath = /^\/agents\/research\/([a-f0-9-]{36})$/;
 
 function json(status, body) {
@@ -13,7 +14,7 @@ function jobResponse(job, cached) {
     { id, status, cached, sourceCount, completedAt });
 }
 
-async function readSegmentId(request) {
+async function readSegment(request) {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json" || !request.body) return null;
   const reader = request.body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -31,8 +32,10 @@ async function readSegmentId(request) {
       text += decoder.decode(value, { stream: true });
     }
     const body = JSON.parse(text + decoder.decode());
-    return body && Object.keys(body).length === 1 && typeof body.segmentId === "string"
-      && segmentPattern.test(body.segmentId) ? body.segmentId : null;
+    if (!body || !Object.keys(body).every(key => key === "segmentId" || key === "datasetVersion")
+      || typeof body.segmentId !== "string" || !segmentPattern.test(body.segmentId)
+      || (Object.hasOwn(body, "datasetVersion") && (typeof body.datasetVersion !== "string" || !versionPattern.test(body.datasetVersion)))) return null;
+    return body;
   } catch {
     return null;
   } finally {
@@ -67,14 +70,18 @@ export function createResearchRoutes({ authenticate, resolvePublicSegment, store
         return jobResponse(await store.finish(job.id, outcome.status === "complete" ? outcome.sources : null));
       }
 
-      const segmentId = await readSegmentId(request);
-      if (!segmentId) return json(422, { status: "invalid_segment" });
-      const publicName = await resolvePublicSegment(owner, segmentId);
+      const input = await readSegment(request);
+      if (!input) return json(422, { status: "invalid_segment" });
+      const { segmentId } = input;
+      const segment = await resolvePublicSegment(owner, segmentId, input.datasetVersion);
+      const publicName = typeof segment === "string" ? segment : segment?.name;
       if (typeof publicName !== "string" || !publicName.trim() || publicName.length > 160) {
         return json(404, { status: "unknown_segment" });
       }
 
-      const { job, created, cached } = await store.claim({ owner, segmentId, publicName: publicName.trim() });
+      const { job, created, cached } = await store.claim({
+        owner, segmentId, publicName: publicName.trim(), datasetVersion: segment?.datasetVersion,
+      });
       if (created) ctx.waitUntil(start(job.id, publicName.trim()));
       return jobResponse(job, cached);
     } catch {

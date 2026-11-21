@@ -8,7 +8,7 @@ import { auditPhoto, draftLightingProposal, draftNews, reviewProposal, stewardRe
 import { createModelClient } from "../src/integrations/openai.mjs";
 import { createPreviewServer } from "../src/workers/preview.mjs";
 import { acknowledgeSos, newSos, submitSos, transitionSos } from "../src/safety/sos.mjs";
-import { createVoiceTools, getSignedVoiceUrl } from "../src/integrations/voice.mjs";
+import { createVoiceTools } from "../src/integrations/voice.mjs";
 import { askTrip, createWorkflows } from "../src/agentic-workflow/agents.mjs";
 
 const night = { from: "siam", to: "central", time: "21:00", mode: "night" };
@@ -381,7 +381,7 @@ test("SOS release, cancel, practice, deduplication, and separate acknowledgement
   assert.equal((await acknowledgeSos(input, { actor: { id: "person" }, outbox })).status, "acknowledged");
 });
 
-test("ElevenLabs client tools expose only open form, ask, and open SOS sheet", async () => {
+test("Voice client tools expose only open form, ask, and open SOS sheet", async () => {
   let opened = 0;
   const tools = createVoiceTools({ resolveIntent: async ({ text }) => ({ text }),
     askTrip: async question => ({ question }), openSosSheet: () => { opened += 1; } });
@@ -389,12 +389,7 @@ test("ElevenLabs client tools expose only open form, ask, and open SOS sheet", a
   assert.equal((await tools.open_sos_sheet({ reason: "emergency_words", send: true })).status, "invalid");
   assert.equal((await tools.open_sos_sheet({ reason: "emergency_words" })).status, "opened");
   assert.equal(opened, 1);
-  assert.equal((await getSignedVoiceUrl({})).status, "unavailable");
-  const signed = await getSignedVoiceUrl({ apiKey: "test", agentId: "agent_test", fetchImpl: async url => {
-    assert.equal(url.searchParams.get("agent_id"), "agent_test");
-    return new Response('{"signed_url":"wss://api.elevenlabs.io/v1/convai/conversation?test"}');
-  } });
-  assert.equal(signed.status, "ok");
+
 });
 
 test("MCP exposes read-only tools for the named fixture and rejects unknown versions", () => {
@@ -431,6 +426,6 @@ test("HTTP API routes validate the request and default to fixture, no provider",
   }
   assert.equal((await request("/api/status")).value.modelConfigured, false);
   assert.equal((await request("/api/plan", "POST", { request: night })).value.decision, "VERIFY");
-  assert.equal((await request("/api/voice/session", "POST", { consent: false })).value.status, "unavailable");
+  assert.equal((await request("/api/voice/session", "POST", { consent: false })).code, 404);
   assert.equal((await request("/api/intent", "POST", { text: "x" }, "https://example.org")).code, 403);
 });

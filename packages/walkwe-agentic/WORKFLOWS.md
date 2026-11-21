@@ -32,7 +32,7 @@
 | **Steward — GPT‑6.1 Terra ตามแผน** | กลุ่ม unknown, ข้อมูลรายงานแบบลดตัวตน และ label จากภาพที่ผ่าน consent → candidate proposal ไม่มีสิทธิ์เปิดดูข้อมูลผู้เดินหรือ publish | จบที่ draft หรือขอเพิ่ม evidence หากเสียงโหวตไม่พอคง unknown จนกว่าคนตรวจ |
 | **ข่าว — GPT‑6.2 Sol** `gpt-6.2-sol` medium | ข้อความข่าวสาธารณะที่ทีมส่งเข้า และ segment IDs ที่อนุญาต → วันเกิดเหตุ/วันเผยแพร่/ประเภท/ช่วงถนน/URL เป็นร่าง ไม่รับ URL ที่เครื่องมือของโมเดลสร้างเอง | `pending_review` เสมอ จับคู่ไม่ได้เก็บ unassigned ให้ผู้ตรวจตัดสิน โค้ด dedupe และเลือกรับเฉพาะรายการอนุมัติใน dataset |
 | **Human review — คนและฐานข้อมูล** | ผู้ดูแลที่ backend ยืนยันสิทธิ์อ่าน pending proposal ตรวจแหล่งและช่วงเวลา → approve/reject และบันทึก audit | publish เป็น transaction ที่ตรวจ revision พร้อม bump dataset version กรณีข้อมูลใหม่เข้าคิวระหว่าง approve ให้ขอโหลดใหม่ |
-| **Voice — ElevenLabs** | Adapter มี 13 client tools และใช้ trip กับช่วงถนนจาก state ฝั่งแอป ข้อความสำหรับพูดมาจาก callback ของแอป | คำสั่งช่วยเหลือเปิด SOS sheet และคำสั่งแชร์เปิดหน้าขอยืนยัน รอต่อ callbacks กับหน้าแอปจริง |
+| **Voice — GPT-Live** | เครื่องมือผูกกับหน้าจอและทริปปัจจุบัน ข้อความนำทางใช้เฉพาะผลที่แอปตรวจแล้ว | คำสั่งช่วยเหลือเปิด SOS sheet และคำสั่งแชร์เปิดหน้าขอยืนยัน |
 | **SOS — state machine และบริการส่ง** | กดค้าง/ตัวเลือกเข้าถึง → นับถอยหลังที่ยกเลิกได้ → ยืนยันและส่งถึง verified recipient ที่ยังยินยอม ระดับสิทธิ์และการส่งซ้ำคุมฝั่ง server | แยก provider accepted, recipient ACK, cancel, failed, delivery unknown, expired และ practice โหมดซ้อมใช้ simulator เท่านั้น |
 | **Build / eval — Codex และ harness** | Fixture, Worker snapshot, model ID/effort, mock provider และ regression cases → ผล eval พร้อม trace ที่ตัดข้อมูลส่วนตัว | เก็บ test results ของ fixture, mocked provider และ live แยกกัน ใช้ replay พร้อมป้ายถ้า runtime ยังไม่พร้อม |
 | **MCP — อ่านอย่างเดียว** | Codex หรือ Claude ส่ง segment ID กับ fixture/mode → หลักฐานหรือ route replay จากชุดข้อมูลที่ระบุ ไม่มี action ที่เผยแพร่และไม่รับพิกัด/เบอร์ | คืน output พร้อม dataset version และป้าย fixture ใช้ CLI หรือ worker core เดิมเมื่อไม่มี MCP |
@@ -44,12 +44,12 @@
 - สถานะไฟแยก known lit, dark และ unknown สถานะ lamp/CCTV/crowd เป็นคนละปัจจัย แสดง source, observed time, stale/estimated และ version ห้าม extrapolate ความสว่างจากชั้นถนน
 - Stress test คำนวณผลสองสมมติฐานสำหรับ unknown หากผลพลิกคงตัวชี้ช่วงที่มีผลใน trace ข้อมูลใน dataset ยังเป็น unknown
 - Model output เลือก enum และ IDs จำกัดเท่านั้น ตัวเลขและคำอธิบายสุดท้ายประกอบจากค่าที่ตรวจแล้ว โค้ดตรวจ snapshot, ความสอดคล้องของ claim, เงื่อนไขเวลา/ทางเดิน และถ้อยคำรับประกัน
-- แยก function call ฝั่งแอป, Model API/ElevenLabs และ HTTP services ฝั่ง server ออกจาก MCP สำหรับเครื่องมือทีมเก็บ key ฝั่งบริการ และไม่มี raw GPS, เบอร์, ภาพดิบ หรือ transcript ใน MCP, Dot หรือ eval artifacts
+- แยก function call ฝั่งแอป, OpenAI API และ HTTP services ฝั่ง server ออกจาก MCP สำหรับเครื่องมือทีมเก็บ key ฝั่งบริการ และไม่มี raw GPS, เบอร์, ภาพดิบ หรือ transcript ใน MCP, Dot หรือ eval artifacts
 - ข่าว/รูป/user prompt และ tool outputs เป็น input ที่ผ่าน schema ผ่าน model allowlist และไม่มีสิทธิ์เปลี่ยนคำสั่งระบบ
 
 ## ข้อตกลงพื้นที่ของทีม
 
-- Claude ยืนยันว่า Codex ดูแล `packages/walkwe-agentic/` สำหรับ core, adapters, fixtures, MCP และ tests ส่วนงานของ Claude ในรอบที่ประสานอยู่ที่เอกสารสเปกและค่าตั้ง ElevenLabs
+- Claude ยืนยันว่า Codex ดูแล `packages/walkwe-agentic/` สำหรับ core, adapters, fixtures, MCP และ tests ส่วนงานของ Claude ในรอบที่ประสานอยู่ที่เอกสารสเปกและค่าตั้งเสียง
 - UI และ routing worker ของแอปจะเชื่อมผ่าน adapter ตาม path และ schema ที่ทีมส่งให้
 - อ่านผล approval และ audit ผ่าน interface ของ service ทีมรับผิดชอบ data storage เลือก DB และ migration หลัง repo ตัวแอปเข้ามา
 - ตรวจสอบ live provider, sender/receiver และ build ที่ deploy จากหลักฐานใหม่ก่อนประกาศว่าใช้งานจริง

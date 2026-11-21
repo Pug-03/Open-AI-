@@ -4,12 +4,28 @@
 
 | Lane | Result | What it establishes |
 | --- | --- | --- |
-| Node tests across both packages | 33/33 | Routing, tool order and retry, deterministic checks, Worker continuation and authorization, voice bindings, SOS practice and research queue |
+| Node tests across both packages | 41/41 | Routing, tool order and retry, deterministic checks, Worker continuation and authorization, voice bindings, SOS practice and research queue |
 | Fixture eval | 34/34 | Parsing, route metrics, evidence snapshots, and safeguards with the Siam scenario graph |
 | Mock Responses eval | 18/18 | Structured outputs, tool replay, fallback and 14 regression traps |
-| Live OpenAI on the source PR | 7/12 | Provider usage and latency for the imported engine. Both planner cases used the Worker fallback. |
+| Live OpenAI on the Web2 integration checkout | 12/12 | Intent 10/10 and Planner 2/2. Critic accepted both verified trip proposals. |
 
 The saved [offline report](evals/eval_report.json) uses fixture dataset version `siam-sandbox-1`. See the [historical live run](../../docs/agentic/EVAL_2026-11-21.md) and the [12-case live rerun with per-case usage, latency, cost, and Critic trace](../../docs/agentic/EVAL_2026-11-21_RERUN.md).
+
+### Integration live run, 21 November 2026
+
+OpenAI executed all 12 cases in `siam-sandbox-1` with `walkwe-context-v3`. GPT‑6.1 Terra ran Intent and Planner. GPT‑6.1 Sol accepted the two Planner drafts after the verifier passed.
+
+| Cases | Passed | p50 | p95 |
+| --- | ---: | ---: | ---: |
+| All live cases | 12/12 | 1,662 ms | 8,916 ms |
+| Intent | 10/10 | 1,603 ms | 3,915 ms |
+| Planner and Critic | 2/2 | 7,661 ms | 8,916 ms |
+
+- `L-day` completed with a verified result in 7,661 ms.
+- `L-night` produced a verified clarification in 8,916 ms. It preserved unknown lighting and reached the expected `needs_user` state.
+- All 16 requests reported usage. They used 9,763 input and 893 output tokens, including 276 reasoning tokens. Estimated total cost was **$0.016954**.
+
+The hosted routing integration tests exercise the public Siam graph with mocked model calls. The 12 live cases above use scenario fixtures, so staging still needs a live trip against the deployed graph and voice service.
 
 ## Run the checks
 

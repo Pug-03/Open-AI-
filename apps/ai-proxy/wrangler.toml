@@ -1,4 +1,4 @@
-# Walk We speech proxy. Set ELEVENLABS_API_KEY as a Worker secret to enable it.
+# Walk We OpenAI and Agentic proxy. Keep OPENAI_API_KEY in a Worker secret.
 name = "walkwe-ai-proxy-v2"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
@@ -20,6 +20,23 @@ simple = { limit = 20, period = 60 }
 name = "GLOBAL_LIMITER"
 namespace_id = "2002"
 simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "AGENTIC_MODEL_LIMITER"
+namespace_id = "2003"
+simple = { limit = 12, period = 60 }
+
+[[durable_objects.bindings]]
+name = "EVIDENCE_QUEUE"
+class_name = "EvidenceQueue"
+
+[[durable_objects.bindings]]
+name = "SOS_OUTBOX"
+class_name = "SosOutbox"
+
+[[migrations]]
+tag = "agentic-v1"
+new_sqlite_classes = ["EvidenceQueue", "SosOutbox"]
 
 # Keep request text out of Worker logs.
 [observability]

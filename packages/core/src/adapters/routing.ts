@@ -94,6 +94,8 @@ export interface Route {
 
 export interface RouteResult {
   routes: Route[];
+  /** Fingerprint of the public graph used for the route evidence. */
+  datasetVersion?: string;
   /** Sun at departure, for the UI ("sun 62° high"). */
   sun: { altitude: number; azimuth: number };
   /** Malls skipped because they are closed at that time. */

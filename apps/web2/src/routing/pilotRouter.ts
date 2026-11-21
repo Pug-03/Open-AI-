@@ -2,6 +2,10 @@ import { activeCity } from '@walkwe/config';
 import { Area, AreaRouter } from '@walkwe/core';
 import { toAreaInput, type AreaDataset, type IncidentsDataset } from '@walkwe/data';
 
+export function pilotSnapshotInput(area: AreaDataset, incidents: IncidentsDataset) {
+  return JSON.stringify([area, incidents]);
+}
+
 export function createPilotRouter(dataset: AreaDataset, incidents: IncidentsDataset | null) {
   const area = new Area(toAreaInput(dataset, (incidents?.items ?? []).map((item) => ({
     id: item.id, wayIds: item.wayIds, category: item.category, occurredOn: item.occurredOn,

@@ -10,12 +10,12 @@ const cloud = (pct: number) => ({
   },
 });
 
-async function pickSiamToCentralWorld(page: import('@playwright/test').Page) {
+async function pickWalk(page: import('@playwright/test').Page, query = 'central', destination = /centralwOrld/) {
   await page.getByTestId('point-from').click();
   await page.getByTestId('use-current').click();
   await expect(page.getByRole('heading', { name: 'ไปที่ไหน' })).toBeVisible();
-  await page.getByRole('searchbox', { name: 'ค้นหาสถานที่' }).fill('central');
-  await page.getByTestId('search-results').getByRole('button', { name: /centralwOrld/ }).click();
+  await page.getByRole('searchbox', { name: 'ค้นหาสถานที่' }).fill(query);
+  await page.getByTestId('search-results').getByRole('button', { name: destination }).click();
   await expect(page.getByTestId('ready')).toBeVisible();
 }
 
@@ -37,7 +37,7 @@ test('daytime: routes, mapped shade evidence and AI fallback', async ({ page }) 
   await page.clock.install({ time: new Date('2026-10-15T14:00:00+07:00') });
   await page.clock.resume(); // start at that time, then let it run like a real clock
   await page.goto('/plan');
-  await pickSiamToCentralWorld(page);
+  await pickWalk(page);
 
   // Auto mode from the time: day.
   await expect(page.getByTestId('mode-day')).toHaveAttribute('aria-pressed', 'true');
@@ -81,7 +81,7 @@ test('scheduled for the evening: night lighting evidence and verified AI highlig
   await page.clock.install({ time: new Date('2026-10-15T14:00:00+07:00') });
   await page.clock.resume(); // start at that time, then let it run like a real clock
   await page.goto('/plan');
-  await pickSiamToCentralWorld(page);
+  await pickWalk(page);
 
   await page.getByRole('button', { name: 'ตั้งเวลา' }).click();
   await page.getByTestId('walk-time-input').fill('2026-10-15T21:30');
@@ -107,9 +107,54 @@ test('back from results returns to the planner with both points kept', async ({ 
   await page.clock.install({ time: new Date('2026-10-15T10:30:00+07:00') });
   await page.clock.resume(); // start at that time, then let it run like a real clock
   await page.goto('/plan');
-  await pickSiamToCentralWorld(page);
+  await pickWalk(page);
   await page.getByTestId('find-routes').click();
   await expect(page.locator('.route-option').first()).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'กลับ' }).click();
   await expect(page.getByTestId('point-to')).toHaveAttribute('data-coords', /^13\.74646/); // curated landmark point (landmarks.ts)
+});
+
+test('night route research submits the selected edge and shows the pending review count', async ({ page, context }) => {
+  const proxy = process.env.VITE_AI_PROXY_URL?.replace(/\/$/, '');
+  test.skip(!proxy, 'Build with a mocked research proxy origin.');
+  await page.clock.install({ time: new Date('2026-10-15T21:30:00+07:00') });
+  await page.clock.resume();
+  let selected: string;
+  let capability: string | undefined;
+  const job = '8be14db7-c823-46c1-a183-e41fad856188';
+  const headers = {
+    'access-control-allow-origin': process.env.WALKWE_TEST_APP_ORIGIN ?? 'http://localhost:4175',
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': 'content-type, x-walkwe-research-session',
+  };
+
+  await context.route(`${proxy}/agents/research**`, async (route) => {
+    const request = route.request();
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (request.method() === 'POST') {
+      const input = request.postDataJSON();
+      expect(input).toEqual({ segmentId: selected, datasetVersion: expect.stringMatching(/^web2:[0-9a-f]{24}$/) });
+      capability = request.headers()['x-walkwe-research-session'];
+      expect(capability).toMatch(/^[a-f0-9-]{36}$/);
+      return route.fulfill({ status: 202, headers, json: { id: job, status: 'starting' } });
+    }
+    expect(request.url()).toBe(`${proxy}/agents/research/${job}`);
+    expect(request.headers()['x-walkwe-research-session']).toBe(capability);
+    return route.fulfill({ headers, json: { id: job, status: 'pending_review', sourceCount: 2 } });
+  });
+
+  await page.goto('/plan');
+  await pickWalk(page, 'ssq1', /สยามสแควร์วัน/);
+  await page.getByTestId('find-routes').click();
+  const research = page.getByTestId('research-segment');
+  const button = research.getByRole('button', { name: 'ค้นแหล่งข้อมูลสาธารณะ' });
+  await expect(button).toBeDisabled({ timeout: 15_000 });
+  const segment = research.getByRole('combobox');
+  selected = await segment.locator('option[value^="edge:"]').first().getAttribute('value') ?? '';
+  expect(selected).toMatch(/^edge:\d+$/);
+  await segment.selectOption(selected);
+  await button.click();
+  await expect(research.getByRole('status')).toHaveText('เริ่มค้นแล้ว');
+  await expect(research.getByRole('status')).toHaveText('ได้ข้อมูลเพิ่ม 2 แหล่ง รอผู้ตรวจ');
+  await expect(page.getByTestId('start-nav')).toBeEnabled();
 });

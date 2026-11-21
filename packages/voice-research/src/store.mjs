@@ -5,10 +5,11 @@ const accessKey = (id, owner) => `research:access:${id}:${owner}`;
 const pending = job => job.status === "starting" || job.status === "researching";
 
 // Uses the asynchronous transaction/KV methods of Durable Object storage.
-export function createResearchStore(storage, now = Date.now) {
+export function createResearchStore(storage, now = Date.now, recordDraft) {
   return {
-    claim({ owner, segmentId, publicName }) {
-      const index = `research:segment:${JSON.stringify([segmentId, publicName])}`;
+    claim({ owner, segmentId, publicName, datasetVersion }) {
+      const version = datasetVersion ? { datasetVersion } : {};
+      const index = `research:segment:${JSON.stringify([segmentId, publicName, datasetVersion])}`;
       return storage.transaction(async tx => {
         const currentId = await tx.get(index);
         const current = currentId && await tx.get(jobKey(currentId));
@@ -18,7 +19,7 @@ export function createResearchStore(storage, now = Date.now) {
         }
 
         const id = crypto.randomUUID();
-        const job = { id, segmentId, status: "starting", expiresAt: now() + searchLifetime };
+        const job = { id, segmentId, ...version, status: "starting", expiresAt: now() + searchLifetime };
         await tx.put(jobKey(id), job);
         await tx.put(index, id);
         await tx.put(accessKey(id, owner), true);
@@ -54,9 +55,12 @@ export function createResearchStore(storage, now = Date.now) {
         }
 
         if (sources.length) {
-          await tx.put(`research:review:${id}`, {
+          const draft = {
             id, segmentId: job.segmentId, kind: "web_research", status: "pending_review", sources, createdAt: completedAt,
-          });
+            ...(job.datasetVersion ? { datasetVersion: job.datasetVersion } : {}),
+          };
+          if (recordDraft) await recordDraft(tx, draft);
+          else await tx.put(`research:review:${id}`, draft);
         }
         const result = { id, segmentId: job.segmentId, status: sources.length ? "pending_review" : "no_sources",
           sourceCount: sources.length, completedAt, expiresAt: completedAt + cacheLifetime };

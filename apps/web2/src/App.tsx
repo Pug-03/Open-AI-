@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { lazyPage, preloadPages } from './lazyPage.ts';
 import Landing from './pages/Landing.tsx';
 import { SosButton } from './components/sos/SosButton.tsx';
+import { SosRelayReceipt } from './components/sos/SosRelayReceipt.tsx';
 import { ScrollManager } from './components/ScrollManager.tsx';
 import { loadSession } from './nav/session.ts';
 import { hasOnboarded, resetFirstRun } from './store/onboarding.ts';
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="/onboarding" element={<Navigate to="/setup" replace />} />
         {/* Asked once before entering the app (own number + contacts for SOS). */}
         <Route path="/plan" element={<PlanGate />} />
+        <Route path="/sos/receipt" element={<SosRelayReceipt />} />
         <Route path="/navigate" element={<Navigate_ />} />
         <Route path="/data" element={<DataLimits />} />
         <Route path="/contacts" element={<Contacts />} />

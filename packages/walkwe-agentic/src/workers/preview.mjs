@@ -4,13 +4,12 @@ import { compareDepartureTimes } from "../routing/core.mjs";
 import { edges, referenceDate, version } from "../routing/fixture.mjs";
 import { draftLightingProposal, draftNews, stewardReview } from "../evidence/review.mjs";
 import { createModelClient, modelProfiles } from "../integrations/openai.mjs";
-import { getSignedVoiceUrl } from "../integrations/voice.mjs";
 import { askTrip, createWorkflows } from "../agentic-workflow/agents.mjs";
 
 const segmentIds = edges.map(edge => edge.id);
 const localHost = /^(?:localhost|127\.0\.0\.1)(?::\d{1,5})?$/;
 
-export function createPreviewServer({ model = null, voice, workflowOptions = {}, dataset } = {}) {
+export function createPreviewServer({ model = null, workflowOptions = {}, dataset } = {}) {
   const workflows = createWorkflows({ ...workflowOptions, model });
   const segmentKnown = dataset?.segmentKnown ?? (id => segmentIds.includes(id));
   const trustedPlan = data => workflows.plan(data.request, { expectedDatasetVersion: data.expectedDatasetVersion });
@@ -43,9 +42,6 @@ export function createPreviewServer({ model = null, voice, workflowOptions = {},
         : segmentIds;
       return draftNews({ ...data, allowedSegmentIds }, data.useModel === true ? model : null);
     },
-    "/api/voice/session": data => data.consent === true && voice
-      ? getSignedVoiceUrl(voice)
-      : { status: "unavailable" },
   };
 
   return createServer(async (req, res) => {
@@ -63,7 +59,7 @@ export function createPreviewServer({ model = null, voice, workflowOptions = {},
       if (pathname === "/api/status" && req.method === "GET") return respond(200, {
         status: "ok", mode: dataset ? "web2" : "fixture", version: dataset?.version ?? version,
         referenceDate: dataset?.referenceDate ?? referenceDate, modelConfigured: Boolean(model),
-        voiceConfigured: Boolean(voice?.apiKey && voice?.agentId), modelProfiles,
+        modelProfiles,
       });
       if (req.method !== "POST" || !Object.hasOwn(actions, pathname)) return respond(404, { status: "not_found" });
       if (req.headers["content-type"]?.split(";")[0] !== "application/json") return respond(415, { status: "expected_json" });
@@ -86,8 +82,7 @@ export function createPreviewServer({ model = null, voice, workflowOptions = {},
 export function startPreview({ workflowOptions, dataset } = {}) {
   const port = Number(process.env.WALKWE_PORT ?? 4178);
   const model = createModelClient({ apiKey: process.env.WALKWE_OPENAI_API_KEY });
-  const voice = { apiKey: process.env.WALKWE_ELEVENLABS_API_KEY, agentId: process.env.WALKWE_ELEVENLABS_AGENT_ID };
-  return createPreviewServer({ model, voice, workflowOptions, dataset }).listen(port, "127.0.0.1", () => {
+  return createPreviewServer({ model, workflowOptions, dataset }).listen(port, "127.0.0.1", () => {
     process.stderr.write(`Walk We ${dataset ? "web2" : "fixture"} API on http://127.0.0.1:${port}\n`);
   });
 }

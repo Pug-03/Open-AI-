@@ -1,14 +1,4 @@
-// Walk We privacy policy (Thailand PDPA). Written from what the code actually
-// does; when a data flow changes (new storage key, new outside service, error
-// reporting switched on), update this file and the effective date.
-//
-// On the device (localStorage, keys ww_*): own phone number, emergency
-// contacts, saved and recent places, the walk in progress, settings.
-// Cache Storage: app files, route photos, map tiles for offline use.
-// Leaves the device: place search text + start point rounded to ~1 km
-// (Photon), start point rounded to ~1 km + time (Open-Meteo), map tile
-// requests (OpenFreeMap). Optional hosted speech sends the text to read and
-// its language to ElevenLabs. Error reporting is off (VITE_ERROR_TRACKING_URL empty).
+// Keep both translations aligned with actual data flows and optional services.
 
 export interface PolicySection {
   title: string;
@@ -27,7 +17,7 @@ export const PRIVACY_POLICY: Record<'th' | 'en', Policy> = {
     title: 'นโยบาย\u200bความเป็นส่วนตัว',
     updated: 'มีผลตั้งแต่ 21 พฤศจิกายน 2569',
     intro:
-      'Walk We ไม่มีระบบสมัครสมาชิกและไม่มีฐานข้อมูลผู้ใช้ ข้อมูลส่วนตัวของคุณเก็บไว้ในมือถือของคุณเองเท่านั้น หน้านี้บอกตามจริงว่าแอปเก็บอะไร ส่งอะไรออกไปบ้าง และคุณจัดการข้อมูลได้ยังไง ตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 (PDPA)',
+      'ใช้แผนที่และวางเส้นทางได้โดยไม่ต้องสมัครสมาชิก หน้านี้อธิบายข้อมูลที่ Walk We เก็บในเครื่อง และข้อมูลที่ใช้เมื่อคุณเลือกใช้ฟีเจอร์ออนไลน์',
     sections: [
       {
         title: 'ข้อมูลที่เก็บไว้ในเครื่องของคุณเท่านั้น',
@@ -45,33 +35,34 @@ export const PRIVACY_POLICY: Record<'th' | 'en', Policy> = {
         title: 'ตำแหน่งของคุณ',
         items: [
           'แอปขอตำแหน่ง GPS เมื่อคุณกด "ใช้ตำแหน่งปัจจุบัน" หรือระหว่างนำทาง และเฉพาะเมื่อคุณอนุญาตเท่านั้น',
-          'ตำแหน่งที่แม่นยำใช้คำนวณเส้นทางในเครื่องของคุณ ไม่ได้ส่งให้เรา',
-          'ตำแหน่งจะออกจากเครื่องเฉพาะตอนที่คุณกด SOS หรือแชร์ตำแหน่งเอง ผ่านแอป SMS หรือ LINE ของคุณ ไปถึงคนที่คุณเลือกเท่านั้น',
+          'แอปใช้ตำแหน่งที่แม่นยำคำนวณเส้นทางบนอุปกรณ์ การตรวจหลักฐานออนไลน์ใช้รหัสสถานที่สาธารณะ เวลาออกเดิน และข้อจำกัดที่คุณเลือก',
+          'เมื่อคุณเลือกส่ง SOS หรือแชร์ตำแหน่ง แอปส่งตำแหน่งไปยังผู้รับที่คุณเลือกผ่าน SMS, LINE หรือบริการส่ง SOS ที่เปิดไว้',
         ],
       },
       {
         title: 'ข้อมูลที่ส่งไปยังบริการภายนอก',
-        body: 'เพื่อให้ค้นหาสถานที่ ดูแผนที่ และคำนวณเงาได้ แอปต้องเรียกบริการเหล่านี้ ทุกบริการจะเห็น IP address ของคุณตามปกติของการใช้เว็บ แต่ไม่ได้รับชื่อ เบอร์โทร หรือผู้ติดต่อของคุณ',
+        body: 'บริการออนไลน์อาจเห็น IP address ของคุณตามปกติของการใช้เว็บ ข้อมูลที่ส่งขึ้นอยู่กับฟีเจอร์ที่คุณเลือก',
         items: [
           'Photon (komoot) สำหรับค้นหาสถานที่: ได้รับคำที่คุณพิมพ์ค้นหา และจุดเริ่มต้นแบบคร่าว ๆ (ปัดเป็นประมาณ 1 กม.)',
           'Open-Meteo สำหรับข้อมูลเมฆ: ได้รับจุดเริ่มต้นแบบคร่าว ๆ (ประมาณ 1 กม.) และเวลาที่คุณจะเดิน',
           'OpenFreeMap สำหรับแผนที่: ได้รับคำขอไฟล์แผนที่ของบริเวณที่คุณกำลังดู',
-          'ถ้าผู้ดูแลเปิดใช้เสียงจาก ElevenLabs และคุณใช้ฟีเจอร์อ่านออกเสียง ระบบจะส่งข้อความที่อ่านและภาษาผ่านเซิร์ฟเวอร์ของ Walk We เพื่อสร้างเสียง',
+          'เมื่อคุณส่งคำขอเดินทางเป็นประโยค เซิร์ฟเวอร์ของ Walk We จะอ่านคำขอ และอาจส่งข้อความให้ OpenAI หากเปิดใช้โมเดลออนไลน์',
+          'เมื่อเปิดไมค์ในโหมด GPT‑Live เสียงจะส่งไปยัง OpenAI ระหว่างการสนทนาเพื่อประมวลผล แอปไม่บันทึกไฟล์เสียงหรือบทสนทนา',
+          'เมื่อใช้ฟีเจอร์อ่านออกเสียง แอปอาจส่งข้อความและภาษาผ่านเซิร์ฟเวอร์ของ Walk We ไปยัง OpenAI ตามการตั้งค่าของเว็บไซต์',
+          'ถ้าเปิดใช้บริการส่ง SOS แบบลงชื่อเข้าใช้ เมื่อคุณยืนยันส่ง บริการจะได้รับตำแหน่งล่าสุดที่หาได้และข้อมูลปลายทางที่ยืนยันแล้ว Walk We เก็บรหัสผู้ส่ง ผู้รับ และสถานะการส่งชั่วคราวเพื่อป้องกันการส่งซ้ำและแสดงผลตอบรับ',
           'เซิร์ฟเวอร์ที่ให้บริการเว็บนี้อาจบันทึก IP และหน้าที่เปิดไว้ชั่วคราวตามปกติของเว็บทั่วไป',
         ],
       },
       {
-        title: 'สิ่งที่เราไม่ทำ',
+        title: 'คุกกี้และการติดตาม',
         items: [
-          'ไม่มีบัญชีผู้ใช้ ไม่ขอชื่อ อีเมล หรือบัตรประชาชน',
+          'บริการส่ง SOS แบบลงชื่อเข้าใช้อาจใช้คุกกี้ของระบบยืนยันตัวตน',
           'ไม่ใช้คุกกี้ติดตาม ไม่มีโฆษณา ไม่มีเครื่องมือวิเคราะห์พฤติกรรม',
-          'ไม่ขายหรือแบ่งปันข้อมูลของคุณให้ใคร',
-          'ไม่ได้รับข้อความ SOS ที่คุณส่ง ข้อความนั้นส่งตรงจากแอป SMS หรือ LINE ของคุณ',
         ],
       },
       {
         title: 'สิทธิ์ของคุณและการลบข้อมูล',
-        body: 'เพราะข้อมูลส่วนตัวอยู่ในเครื่องคุณเท่านั้น คุณดู แก้ไข หรือลบได้เองทุกเมื่อ: แก้เบอร์และผู้ติดต่อได้ในหน้าผู้ติดต่อฉุกเฉิน ลบทุกอย่างได้ด้วยปุ่มด้านล่าง หรือล้างข้อมูลเว็บไซต์ในการตั้งค่าเบราว์เซอร์ เราไม่มีสำเนาข้อมูลของคุณให้ขอดูหรือขอลบเพิ่มเติม',
+        body: 'คุณแก้เบอร์และผู้ติดต่อที่บันทึกไว้ในเครื่องได้ในหน้าผู้ติดต่อฉุกเฉิน หรือล้างข้อมูลอุปกรณ์ด้วยปุ่มด้านล่างและการตั้งค่าเบราว์เซอร์ หากลงทะเบียนผู้รับ SOS ผ่านบริการแยก ให้จัดการข้อมูลการลงทะเบียนกับบริการนั้น',
       },
       {
         title: 'การเปลี่ยนแปลงนโยบาย',
@@ -83,7 +74,7 @@ export const PRIVACY_POLICY: Record<'th' | 'en', Policy> = {
     title: 'Privacy policy',
     updated: 'Effective 21 November 2026',
     intro:
-      'Walk We has no sign-up and no user database. Your personal data stays on your own phone. This page says plainly what the app keeps, what it sends out, and how you control it, under Thailand’s Personal Data Protection Act B.E. 2562 (PDPA).',
+      'You can use maps and plan routes without signing up. This page explains what Walk We stores on your device and what data it uses when you choose an online feature.',
     sections: [
       {
         title: 'Kept on your phone only',
@@ -101,33 +92,34 @@ export const PRIVACY_POLICY: Record<'th' | 'en', Policy> = {
         title: 'Your location',
         items: [
           'The app asks for GPS when you tap “Use current location” or during navigation, and only if you allow it',
-          'Your exact position is used to work out routes on your phone and is not sent to us',
-          'Your location leaves the phone only when you press SOS or share it yourself, through your own SMS or LINE app, to people you choose',
+          'The app uses your exact position to calculate routes on your device. Online evidence review uses public landmark identifiers, departure time and your route constraints',
+          'When you choose to send SOS or share your location, the app sends it to the recipient you select through SMS, LINE or the configured SOS delivery service',
         ],
       },
       {
         title: 'Sent to outside services',
-        body: 'To search places, show maps and work out shade, the app calls these services. Like any website they see your IP address, but they never get your name, phone number or contacts.',
+        body: 'Online services may see your IP address. The information sent depends on the feature you choose.',
         items: [
           'Photon (komoot), place search: the text you type and a rough start point (rounded to about 1 km)',
           'Open-Meteo, cloud cover: a rough start point (about 1 km) and the time you plan to walk',
           'OpenFreeMap, maps: requests for the map tiles of the area you are viewing',
-          'If the site uses ElevenLabs and you enable read-aloud, Walk We sends the text to read and its language through its speech server to generate audio',
+          'When you submit a written trip request, the Walk We server reads it and may send the text to OpenAI when the online model is enabled',
+          'When you turn on the microphone in GPT‑Live, your audio goes to OpenAI for the session. The app keeps no audio recording or conversation transcript',
+          'For read-aloud, the app may send the text and language through the Walk We server to OpenAI, according to the website configuration',
+          'If signed-in SOS delivery is enabled, confirming a send gives the service your latest available location and the verified destination. Walk We temporarily keeps sender and recipient identifiers and delivery state to prevent duplicate sends and report acknowledgement',
           'The server hosting this site may briefly log IP addresses and pages opened, as websites normally do',
         ],
       },
       {
-        title: 'What we don’t do',
+        title: 'Cookies and tracking',
         items: [
-          'No accounts; we never ask for your name, email or ID',
+          'Signed-in SOS delivery may use session cookies from the configured identity service',
           'No tracking cookies, no ads, no behaviour analytics',
-          'We don’t sell or share your data with anyone',
-          'We don’t receive your SOS messages; they go straight from your SMS or LINE app',
         ],
       },
       {
         title: 'Your rights and deleting data',
-        body: 'Because your personal data is only on your phone, you can see, change or delete it at any time: edit your number and contacts on the emergency contacts page, wipe everything with the button below, or clear site data in your browser settings. We hold no copy of your data to request or delete.',
+        body: 'Edit the phone number and contacts stored on your device through the emergency contacts page. Use the button below or browser settings to clear local data. If you enrolled recipients with a separate SOS service, manage those records with that service.',
       },
       {
         title: 'Changes to this policy',

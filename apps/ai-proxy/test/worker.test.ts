@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker, { type Env } from '../src/index';
 
 const ORIGIN = 'https://app.example';
-const env = (over: Partial<Env> = {}): Env => ({ ALLOWED_ORIGINS: ORIGIN, ELEVENLABS_API_KEY: 'k', ...over });
+const ok = { limit: async () => ({ success: true }) };
+const env = (over: Partial<Env> = {}): Env => ({
+  ALLOWED_ORIGINS: ORIGIN, OPENAI_LIVE_ORIGIN: ORIGIN, OPENAI_API_KEY: 'mock-key',
+  RATE_LIMITER: ok, GLOBAL_LIMITER: ok, ...over,
+});
 
 const call = (e: Env, init: { method?: string; origin?: string | null; mode?: string | null; body?: string; path?: string } = {}) => {
   const headers: Record<string, string> = { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' };
@@ -37,10 +41,9 @@ describe('ai-proxy worker', () => {
     expect((await call(env(), { method: 'GET' })).status).toBe(405);
   });
 
-  it('returns 204 when no ElevenLabs key is set', async () => {
-    const res = await call(env({ ELEVENLABS_API_KEY: undefined }), { body: body({ text: 'hi', lang: 'en' }) });
-    expect(res.status).toBe(204);
-    expect(res.headers.get('x-tts')).toBe('off');
+  it('returns 503 when hosted speech is unavailable', async () => {
+    const res = await call(env({ OPENAI_API_KEY: undefined }), { body: body({ text: 'hi', lang: 'en' }) });
+    expect(res.status).toBe(503);
   });
 
   it('returns 429 when the per-client limit is hit', async () => {
@@ -64,21 +67,9 @@ describe('ai-proxy worker', () => {
     expect((await call(env(), { body: body({ text: 'hi', lang: 'en', pad: 'x'.repeat(5000) }) })).status).toBe(400);
   });
 
-  it('streams audio from ElevenLabs on success', async () => {
-    const fetchMock = vi.fn(async () => new Response('mp3', { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const res = await call(env(), { body: body({ text: 'hello', lang: 'en' }) });
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('audio/mpeg');
-    expect(await res.text()).toBe('mp3');
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
-
-  it('maps upstream failures', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { status: 500 })));
+  it('maps a failed OpenAI speech connection to an upstream error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('unavailable', { status: 500 })));
     expect((await call(env(), { body: body({ text: 'hi', lang: 'en' }) })).status).toBe(502);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { status: 429 })));
-    expect((await call(env(), { body: body({ text: 'hi', lang: 'en' }) })).status).toBe(429);
   });
 });
 
@@ -101,7 +92,7 @@ describe('route evidence ranking', () => {
   it('requires spend limits and rejects free text or coordinates before calling the provider', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    expect((await call(env({ OPENAI_API_KEY: 'mock-key' }), { path, body: body(request) })).status).toBe(503);
+    expect((await call(env({ RATE_LIMITER: undefined }), { path, body: body(request) })).status).toBe(503);
     expect((await call(enabled, { path, body: body({ ...request, coordinates: [13, 100] }) })).status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
