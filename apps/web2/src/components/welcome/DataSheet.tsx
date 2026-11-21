@@ -64,11 +64,10 @@ export function DataSheet({ meta }: { meta: DatasetMeta | null }) {
           </thead>
           <tbody>
             {meta ? (
-              meta.layers.map((l, i) => (
+              meta.layers.filter((l) => l.id !== 'incidents').map((l, i) => (
                 <Plot as="tr" key={l.id} delay={i * 50}>
                   <th scope="row">
                     {t(`data.layer.${l.id}` as StringKey)}
-                    {l.id === 'incidents' && meta.incidents.placeholders > 0 && <small>{c('night.sample', { n: meta.incidents.placeholders })}</small>}
                   </th>
                   <td className="num fig">{l.count.toLocaleString()}</td>
                   <td>{[...new Set(l.sources.map((s) => sourceName(s.name)))].join(', ')}</td>
