@@ -11,3 +11,7 @@ The microphone fills the place search field using the browser's Web Speech API. 
 The browser can read localized instructions and arrival messages aloud. Sites that configure the optional ElevenLabs Worker send up to 300 characters of the text to be read and its language to `POST /speak`. The Worker returns MP3 audio, which the app caches in memory for the session. The browser voice is used when hosted speech is unavailable. The SOS countdown uses the browser voice.
 
 The ElevenLabs key lives in the Worker secret `ELEVENLABS_API_KEY`. The Worker checks the site's origin, limits requests and leaves request text out of its logs. See [README](README.md#optional-hosted-speech) for configuration.
+
+## Spend protection
+
+The Worker's origin and Fetch Metadata checks only stop browsers on other sites. A script that runs outside a browser can fake those headers, so the real limits are the rate limits in `apps/ai-proxy/wrangler.toml` (20 requests per minute per client, 120 per minute overall), the prepaid ElevenLabs credit, and the spend limit set in the ElevenLabs console. Keep a spend limit set there.
