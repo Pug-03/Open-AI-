@@ -244,7 +244,7 @@ export function createAgentStepHandler({ fetchImpl = fetch, authorize = defaultA
         ...state, input, step: body.step_index + 1, seenCalls: [...state.seenCalls, toolCall.call_id], callId: toolCall.call_id, finish,
       });
       return respond(200, {
-        response_id: responseId, status: finish ? "final" : "tool_calls", tool_calls: [toolCall], final: finish ? toolCall.arguments : null,
+        response_id: responseId, status: "tool_calls", tool_calls: [toolCall],
       }, usage);
     } catch (error) {
       if (signal.aborted) return respond(504, { error: "deadline" }, usage);

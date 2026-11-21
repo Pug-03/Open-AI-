@@ -107,6 +107,7 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
           input: JSON.stringify({ event, route: { unknown: route.unknown }, warnings }),
           schema: companionSchema, signal: AbortSignal.timeout(4000),
         });
+        if (result?.action === "silent") return { action: "silent", warnings, handled: [...handled, event] };
         if (["warn", "offer_replan"].includes(result?.action)) {
           action = result.action;
           source = modelProfiles.companion.model;

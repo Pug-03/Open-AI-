@@ -228,6 +228,31 @@ test("V7 requires explicit stair-free segments when the user asks to avoid stair
   }
 });
 
+test("V3 rejects blanket lighting claims in the summary and on individual route cards", () => {
+  const trip = { ...night, preference: "direct" };
+  const result = planRoute(trip);
+  const routeId = result.recommendedId;
+  assert.ok(result.routes.find(route => route.id === routeId).unknown > 0);
+  const trace = ["plan_routes", "stress_test_route"].map(step => ({ step, status: "ok" }));
+  const seenEvidence = new Map([
+    ["lane-gap", { factor: "lighting", segment_id: "lane-gap", value: null, dataset_version: result.datasetVersion }],
+    [`route:${routeId}`, { factor: "route", route_id: routeId, dataset_version: result.datasetVersion }],
+  ]);
+  const draft = finish(result);
+  const check = (candidate, language = "th") => verifyFinish({ ...candidate, language }, trace, {
+    result, seenEvidence, request: plannerContext({ ...trip, language }, result).request,
+  }).checks.filter(item => !item.passed).map(item => item.id);
+  assert.deepEqual(check(draft), []);
+  assert.deepEqual(check({ ...draft, text: "บางช่วงยังไม่มีข้อมูลไฟ แต่ทุกช่วงของทางที่แนะนำมีไฟสว่าง" }), ["V3"]);
+  assert.deepEqual(check({
+    ...draft,
+    card_notes: draft.card_notes.map(card => card.route_id === routeId ? { ...card, note: "มีไฟสว่างตลอดทาง" } : card),
+  }), ["V3"]);
+  assert.deepEqual(check({ ...draft, text: "บางช่วงยังไม่มีข้อมูลไฟ ทางเดินไม่ได้สว่างตลอดทาง" }), []);
+  assert.deepEqual(check({ ...draft, text: "Some lighting is unknown. The route is fully lit." }, "en"), ["V3"]);
+  assert.deepEqual(check({ ...draft, text: "Some lighting is unknown. The route is not fully lit." }, "en"), []);
+});
+
 test("Planner falls back on wrong evidence and conflicting metrics stay out", async () => {
   const result = replay();
   let attempt = 0;
@@ -287,6 +312,19 @@ test("Companion requires an application event and enforces one event and two not
   const second = await engine.companion({ ...first, event: "closing", route });
   assert.equal(second.action, "offer_replan");
   assert.equal((await engine.companion({ ...second, event: "rain", route })).action, "silent");
+});
+
+test("Companion stays silent without spending a warning and handles the event once", async () => {
+  let calls = 0;
+  const engine = createWorkflows({ model: { structured: async () => {
+    calls += 1;
+    return { action: "silent" };
+  } } });
+  const route = replay().routes[0];
+  const result = await engine.companion({ event: "rain", route, warnings: 1, handled: ["closing"], useModel: true });
+  assert.deepEqual(result, { action: "silent", warnings: 1, handled: ["closing", "rain"] });
+  assert.deepEqual(await engine.companion({ ...result, event: "rain", route, useModel: true }), result);
+  assert.equal(calls, 1);
 });
 
 test("Steward and newsroom outputs stay pending; reviewer identity is separate", async () => {

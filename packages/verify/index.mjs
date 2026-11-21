@@ -5,6 +5,13 @@ const toolProblem = /เครื่องมือ.*(?:ขัดข้อง|�
 const oldEvidence = /เก่า|ล้าสมัย|ไม่ตรงกับเวลา|\b(?:stale|outdated|old)\b/iu;
 const reported = /ผู้ใช้รายงาน|รายงานจากผู้ใช้|user.reported|reported by (?:a |the )?user/iu;
 const missingLight = /ไม่(?:มี|ทราบ|รู้)ข้อมูล(?:ไฟ|แสง)|(?:ไฟ|แสง).*(?:ไม่ทราบ|ไม่ชัดเจน)|\b(?:unknown|unverified|missing)\b/iu;
+// shortcut: matches explicit whole-route claims, use structured rendering when lighting prose needs full coverage.
+const fullLightingClaims = [
+  /(?:ทุกช่วง|ตลอด(?:ทั้ง)?(?:เส้น)?ทาง)[^.!?\n]{0,32}(?<!ไม่|ไม่ได้|ไม่มีไฟ|ไม่มีแสง)(?:มีไฟ|สว่าง)/u,
+  /(?<!ไม่|ไม่ได้|ไม่มีไฟ|ไม่มีแสง)(?:มีไฟ(?:สว่าง)?|สว่าง)\s*(?:ครบ\s*)?(?:ทุกช่วง|ตลอด(?:ทั้ง)?(?:เส้น)?ทาง)/u,
+  /(?<!not )(?<!n't )\b(?:(?:fully|entirely|completely|continuously) (?:lit|illuminated)|(?:lit|illuminated) (?:throughout|(?:the )?entire (?:route|way)))\b/iu,
+  /\b(?:all|every) (?:segments?|sections?) (?:is|are) (?:lit|illuminated)\b/iu,
+];
 const timeMinutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 const sameIds = (a, b) => a.length === b.length && new Set(a).size === a.length && a.every(id => b.includes(id));
 
@@ -31,6 +38,11 @@ function routeConstraints(route, request, result) {
   return (!request.noStairs || route.segments.every(segment => segment.stairs === false))
     && (request.maxMinutes === null || route.minutes <= request.maxMinutes)
     && (request.arriveBy === null || timeMinutes(result.time) + route.minutes <= timeMinutes(request.arriveBy));
+}
+
+function lightingClaimFits(text, route) {
+  return !fullLightingClaims.some(pattern => pattern.test(text))
+    || route?.segments.every(segment => segment.light === "lit");
 }
 
 function verifiedValues(selected, result, records) {
@@ -65,6 +77,8 @@ export function verifyFinish(final, trace, { result, request, seenEvidence, need
   check("V2", flagText.every(value => !banned.test(value)), "remove_absolute_safety_wording");
   const nightLightingUnknown = result.mode === "night" && Boolean(route?.unknown || result.stress.flipped);
   check("V3", (!nightLightingUnknown || (final.unknowns.includes("lighting") && missingLight.test(final.text)))
+    && lightingClaimFits(flagText[0], route)
+    && cards.every((card, index) => lightingClaimFits(flagText[index + 1], result.routes.find(item => item.id === card.route_id)))
     && records.filter(record => record.segment_id && record.value === null).every(record => final.unknowns.includes(record.factor))
     && final.claims.every(claim => claim.kind !== "lighting_known" || claim.evidence_ids.some(id => {
       const record = seenEvidence.get(id);

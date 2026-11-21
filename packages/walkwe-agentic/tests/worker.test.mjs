@@ -66,15 +66,40 @@ test("worker forwards an allowlisted model step and replays only the matching to
   assert.doesNotMatch(calls[0].input[0].content, /0812345678/);
 
   const continued = await handler(request(continuation(result.response_id)), env);
-  const completed = await continued.json();
+  const proposed = await continued.json();
   assert.equal(continued.status, 200);
-  assert.equal(completed.status, "final");
-  assert.deepEqual(completed.final, final);
-  assert.equal(completed.tool_calls[0].call_id, "call_2");
+  assert.equal(proposed.status, "tool_calls");
+  assert.equal(proposed.final, null);
+  assert.deepEqual(proposed.tool_calls, [{ call_id: "call_2", name: "finish_trip", arguments: final }]);
   assert.equal(Object.hasOwn(calls[1], "previous_response_id"), false);
   assert.deepEqual(calls[1].input.slice(-2).map(({ type, call_id }) => ({ type, call_id })), [
     { type: "function_call", call_id: "call_1" }, { type: "function_call_output", call_id: "call_1" },
   ]);
+});
+
+test("a finish proposal at the first step stays pending host verification and can receive a rejection", async () => {
+  let calls = 0;
+  const handler = createAgentStepHandler({ fetchImpl: async () => {
+    calls += 1;
+    return calls === 1 ? providerOutput("finish_trip", "early_finish", final)
+      : providerOutput("plan_routes", "after_rejection", planArgs);
+  } });
+  const initial = await handler(request(first), env);
+  assert.equal(initial.status, 200);
+  const proposal = await initial.json();
+  assert.equal(proposal.status, "tool_calls");
+  assert.equal(proposal.final, null);
+  const feedback = {
+    ...continuation(proposal.response_id),
+    tool_outputs: [{ call_id: "early_finish", output: envelope({}) }],
+  };
+  assert.equal((await handler(request(feedback), env)).status, 400);
+  feedback.tool_outputs[0].output = JSON.stringify({
+    status: "error", data: {}, error: { checks_failed: ["V5", "V8"] }, dataset_version: "siam-sandbox-1",
+  });
+  const resumed = await handler(request(feedback), env);
+  assert.equal(resumed.status, 200);
+  assert.equal((await resumed.json()).tool_calls[0].name, "plan_routes");
 });
 
 test("worker verifies continuation ownership, exact tool ID, and fresh request shape", async () => {

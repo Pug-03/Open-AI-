@@ -52,7 +52,7 @@ From the repo root, run `npm run agentic:web2` for the canonical routing dataset
 
 Start `POST /agent/step` with `agent`, `trip_id`, `step_index: 0`, `input` containing `text`, `lang`, `profile`, and `now`, `previous_response_id: null`, and an empty `tool_outputs` array. For a follow-up, increment the index, omit `input`, echo `response_id` as `previous_response_id`, and provide the expected `call_id` and a JSON-encoded tool envelope with `status`, `data`, `error`, and `dataset_version`.
 
-The response ID is an expiring encrypted continuation bound to the authenticated principal, trip, role, step, and tool call. Responses requests retain `store: false` and execute one model tool call at a time. The host runs and verifies tools and terminal drafts. The endpoint reports usage and estimated cost where available and maps upstream rate limiting and invalid output to HTTP 429 and 422. A production adapter also needs host authorization, rate limiting, and replay idempotency.
+The response ID is an expiring encrypted continuation bound to the authenticated principal, trip, role, step, and tool call. Responses requests retain `store: false` and execute one model tool call at a time. A Planner or Critic finish arrives as a tool call with `final: null`. The host verifies the proposed finish against trusted evidence and returns verifier feedback as an error envelope while steps remain. Only the host may promote a verified trip to a user-facing result. The endpoint reports usage and estimated cost where available and maps upstream rate limiting and invalid output to HTTP 429 and 422. A production adapter also needs host authorization, rate limiting, and replay idempotency.
 
 ## Context, retrieval, and caching
 
