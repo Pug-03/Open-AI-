@@ -103,3 +103,15 @@ test('200% text on the navigation screen: instruction readable, main button reac
   await expect(page.getByTestId('step-instruction')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+test('setup loads its avatar and respects reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/setup');
+  const avatar = page.locator('.setup-avatar');
+  await expect(avatar).toBeVisible();
+  await expect.poll(() => avatar.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  await expect(avatar).toHaveCSS('animation-name', 'none');
+  await expect(page.getByTestId('setup-self')).toBeVisible();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(avatar).toHaveCSS('animation-name', 'setup-avatar-lift');
+});
