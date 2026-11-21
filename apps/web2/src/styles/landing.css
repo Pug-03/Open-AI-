@@ -1,0 +1,1403 @@
+/* ============ Walk We v2: welcome page ============
+   The site as a shadow study of Siam. One held drawing at the top that the
+   scroll turns through a day (ShadowStage), then sections laid out like a
+   drawing set: text column, figure column, hairline rules, schedules.
+   Motion grammar: things are plotted. Headings and rows wipe in along the
+   reading direction, rules draw from the left, bars rise from the axis. */
+
+.lp {
+  --nav-h: 64px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---------- Top strip ---------- */
+.lp-nav {
+  position: fixed;
+  z-index: 50;
+  inset: 0 0 auto 0;
+  height: calc(var(--nav-h) + var(--safe-t));
+  padding: var(--safe-t) calc(var(--space-5) + var(--safe-r)) 0 calc(var(--space-5) + var(--safe-l));
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--bg);
+  color: var(--text);
+  border-bottom: var(--hair) solid var(--rule);
+  transition:
+    background-color var(--dur-slow) ease,
+    color var(--dur-slow) ease,
+    border-color var(--dur-slow) ease;
+}
+.lp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  color: inherit;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+.lp-nav nav {
+  display: none;
+  margin-inline-start: var(--space-6);
+  gap: var(--space-1);
+}
+.lp-nav nav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  color: var(--text-dim);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--dur-fast) ease;
+}
+/* A rule that draws under the link from the left. */
+.lp-nav nav a::after {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: 12px;
+  height: 2px;
+  background: var(--rule);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease-out);
+}
+.lp-nav nav a:hover,
+.lp-nav nav a:focus-visible {
+  color: var(--text);
+}
+.lp-nav nav a:hover::after,
+.lp-nav nav a:focus-visible::after {
+  transform: scaleX(1);
+}
+.lp-lang {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0;
+  border: var(--hair) solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  overflow: hidden;
+}
+.lp-lang span {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 46px;
+  color: var(--text-dim);
+  transition:
+    background var(--dur) ease,
+    color var(--dur) ease;
+}
+.lp-lang span[aria-current] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.lp-nav .lp-nav-start {
+  width: auto;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  gap: var(--space-2);
+  font-size: 0.9375rem;
+}
+@media (min-width: 960px) {
+  .lp-nav nav {
+    display: flex;
+  }
+}
+
+/* ---------- The stage: one held drawing ---------- */
+.stage-scene {
+  position: relative;
+  height: 430vh;
+}
+.stage {
+  --hero: 1;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: calc(var(--nav-h) + var(--safe-t)) auto minmax(0, 1fr) auto auto auto;
+  background: var(--plan-ground);
+  color: var(--text);
+  transition: background-color var(--dur-slow) ease;
+}
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+.stage.is-ready .stage-canvas {
+  opacity: 1;
+}
+/* Drafting grid while the plan loads. */
+.stage-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% 48px,
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0 / 48px 100%;
+  opacity: 0.5;
+  transition: opacity 700ms ease;
+  pointer-events: none;
+}
+.stage.is-ready .stage-grid {
+  opacity: 0;
+}
+.stage > * {
+  position: relative;
+}
+.stage > .stage-canvas,
+.stage > .stage-grid {
+  position: absolute;
+}
+
+.stage-north {
+  position: absolute;
+  z-index: 2;
+  left: calc(var(--space-4) + var(--safe-l));
+  top: calc(var(--nav-h) + var(--safe-t) + 60px);
+  width: 30px;
+  height: 42px;
+  pointer-events: none;
+}
+.north-arrow {
+  fill: var(--ink);
+}
+.north-line {
+  stroke: var(--paper);
+  stroke-width: 1.5;
+}
+.stage-north text {
+  fill: var(--ink);
+  font: 700 12px var(--font);
+}
+
+/* Sample trips: one row on phones, a column on desktop. */
+.stage-trips {
+  grid-row: 2;
+  z-index: 3;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--surface);
+  border-bottom: var(--hair) solid var(--rule);
+}
+.stage-trips::-webkit-scrollbar {
+  display: none;
+}
+.stage-trips button {
+  flex: 1 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-inline-end: var(--hair) solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.stage-trips button:last-child {
+  border-inline-end: 0;
+}
+.stage-trips button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+@media (hover: hover) {
+  .stage-trips button:not([aria-pressed='true']):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+
+/* Route schedule */
+.readout {
+  grid-row: 4;
+  z-index: 3;
+  background: var(--surface);
+  border-top: var(--hair) solid var(--rule);
+  opacity: calc(1 - var(--hero));
+  transition: background-color var(--dur-slow) ease;
+}
+.readout table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.readout th,
+.readout td {
+  padding: 7px var(--space-3);
+  text-align: start;
+  white-space: nowrap;
+}
+.readout thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: var(--hair) solid var(--border);
+}
+.readout tbody th {
+  font-weight: 600;
+}
+.readout tbody tr + tr > * {
+  border-top: var(--hair) solid var(--border);
+}
+.readout td:last-child,
+.readout thead th:last-child {
+  text-align: end;
+}
+.readout .is-main .fig {
+  color: var(--accent);
+  font-size: 1.0625rem;
+}
+.readout-wait {
+  color: var(--text-dim);
+  white-space: normal !important;
+}
+.readout-note,
+.readout-legend {
+  display: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-top: var(--hair) solid var(--border);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.readout-legend span {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-end: var(--space-4);
+}
+
+/* Title block */
+.titleblock {
+  position: absolute !important;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: 72px;
+  background: var(--surface);
+  border-top: var(--frame) solid var(--rule);
+  opacity: var(--hero);
+  transform: translateY(calc((1 - var(--hero)) * 28px));
+  clip-path: inset(calc((1 - var(--hero)) * 60%) 0 0 0);
+  transition:
+    background-color var(--dur-slow) ease,
+    visibility 0s linear 0s;
+}
+.stage.is-past .titleblock {
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s linear 400ms;
+}
+.tb-row {
+  padding: var(--space-3) calc(var(--space-5) + var(--safe-r)) var(--space-3) calc(var(--space-5) + var(--safe-l));
+}
+.tb-row + .tb-row {
+  border-top: var(--hair) solid var(--border);
+}
+.tb-brand {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.tb-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.tb-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.tb-sheet {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+  text-align: end;
+}
+.tb-main {
+  padding-block: var(--space-5) var(--space-4);
+}
+.tb-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 6.4vw, 2.5rem);
+  line-height: 1.22;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.tb-title > span {
+  display: block;
+}
+.tb-title small {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+.tb-sub {
+  margin: var(--space-3) 0 var(--space-4);
+  font-family: var(--font-text);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 56ch;
+}
+.tb-actions {
+  display: grid;
+  gap: var(--space-2);
+}
+.tb-cells {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+/* Entrance: the block is plotted row by row. */
+.titleblock .tb-row {
+  animation: tb-plot 700ms var(--ease-plot) both;
+}
+.titleblock .tb-main {
+  animation-delay: 120ms;
+}
+.titleblock .tb-cells {
+  animation-delay: 240ms;
+}
+@keyframes tb-plot {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Caption: the clock and what the shadows are doing now. */
+.caption {
+  grid-row: 5;
+  z-index: 3;
+  padding: var(--space-3) calc(var(--space-5) + var(--safe-r)) var(--space-3) calc(var(--space-5) + var(--safe-l));
+  background: var(--surface);
+  border-top: var(--hair) solid var(--border);
+  opacity: calc(1 - var(--hero));
+  transition: background-color var(--dur-slow) ease;
+}
+.caption p {
+  margin: 0;
+}
+.caption-clock {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+}
+.caption-clock .fig {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+.caption-sun {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.caption-phase {
+  margin-top: var(--space-1) !important;
+  font-family: var(--font-text);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  min-height: 3em;
+  animation: wipe-in 500ms var(--ease-plot) both;
+}
+@keyframes wipe-in {
+  from {
+    clip-path: inset(-0.4em 100% -0.4em -0.2em);
+  }
+  to {
+    clip-path: inset(-0.4em -0.2em);
+  }
+}
+
+.stage-scale {
+  display: none;
+}
+
+/* Time bar: the scroll, as a ruler of the day. */
+.timebar {
+  grid-row: 6;
+  z-index: 5;
+  height: 72px;
+  padding: 0 calc(var(--space-6) + var(--safe-r)) var(--safe-b) calc(var(--space-6) + var(--safe-l));
+  box-sizing: content-box;
+  background: var(--surface);
+  border-top: var(--frame) solid var(--rule);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color var(--dur-slow) ease;
+}
+.timebar-track {
+  position: relative;
+  height: 72px;
+}
+.timebar-track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 30px;
+  height: 12px;
+  border: var(--hair) solid var(--rule);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--amber-500) 55%, var(--white)) 0,
+    color-mix(in srgb, var(--amber-500) 55%, var(--white)) var(--day-end),
+    var(--navy-950) var(--day-end),
+    var(--navy-950) 100%
+  );
+}
+.timebar-tick {
+  position: absolute;
+  top: 46px;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.timebar-tick::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 1px;
+  height: 5px;
+  background: var(--rule);
+}
+.timebar-now {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.timebar-handle {
+  position: absolute;
+  top: 4px;
+  width: 3px;
+  height: 42px;
+  background: var(--accent);
+  margin-left: -1.5px;
+  pointer-events: none;
+}
+.timebar-handle span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  padding: 0 7px;
+  background: var(--accent);
+  color: var(--primary-text);
+  font-size: 0.8125rem;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.timebar:focus-visible {
+  outline-offset: -3px;
+}
+
+@media (min-width: 960px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr) 372px;
+    grid-template-rows: calc(var(--nav-h) + var(--safe-t)) auto auto minmax(0, 1fr) auto;
+    column-gap: var(--space-6);
+  }
+  .stage-north {
+    left: var(--space-6);
+    top: calc(var(--nav-h) + var(--space-6));
+    width: 36px;
+    height: 50px;
+  }
+  .stage-trips {
+    grid-row: 2;
+    grid-column: 2;
+    flex-direction: column;
+    overflow: visible;
+    margin: var(--space-6) var(--space-6) 0 0;
+    border: var(--hair) solid var(--rule);
+    border-bottom: 0;
+  }
+  .stage-trips button {
+    justify-content: flex-start;
+    min-height: 44px;
+    border-inline-end: 0;
+    border-bottom: var(--hair) solid var(--border);
+  }
+  .stage-trips button:last-child {
+    border-bottom: 0;
+  }
+  .readout {
+    grid-row: 3;
+    grid-column: 2;
+    margin-inline-end: var(--space-6);
+    border: var(--hair) solid var(--rule);
+    border-top-width: var(--frame);
+    opacity: 1;
+  }
+  .readout th,
+  .readout td {
+    padding: 10px var(--space-3);
+  }
+  .readout-note,
+  .readout-legend {
+    display: block;
+  }
+  .titleblock {
+    left: var(--space-6);
+    right: auto;
+    bottom: calc(72px + var(--space-6));
+    width: min(580px, 46vw);
+    border: var(--frame) solid var(--rule);
+  }
+  .tb-brand {
+    display: flex;
+  }
+  .tb-cells {
+    display: grid;
+  }
+  .tb-cells span + span {
+    padding-inline-start: var(--space-4);
+    border-inline-start: var(--hair) solid var(--border);
+  }
+  .tb-title {
+    font-size: clamp(1.875rem, 2.7vw, 2.625rem);
+  }
+  .tb-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tb-row {
+    padding-inline: var(--space-5);
+  }
+  .caption {
+    grid-row: 4;
+    grid-column: 1;
+    align-self: end;
+    justify-self: start;
+    margin: 0 0 var(--space-6) var(--space-6);
+    width: min(520px, 44vw);
+    padding: var(--space-4) var(--space-5);
+    border: var(--hair) solid var(--rule);
+  }
+  .caption-clock .fig {
+    font-size: 3rem;
+  }
+  .caption-phase {
+    font-size: 1.0625rem;
+  }
+  .stage-scale {
+    grid-row: 4;
+    grid-column: 2;
+    align-self: end;
+    justify-self: end;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    margin: 0 var(--space-6) var(--space-6) 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--ink);
+    pointer-events: none;
+  }
+  .stage-scale i {
+    display: block;
+    width: var(--scale-px, 80px);
+    height: 7px;
+    border: var(--hair) solid var(--ink);
+    background: linear-gradient(to right, var(--ink) 50%, transparent 50%);
+  }
+  .timebar {
+    grid-row: 5;
+    grid-column: 1 / -1;
+    padding-inline: var(--space-10);
+  }
+}
+
+/* ---------- Sections below the stage ---------- */
+.lp-section {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-5);
+  display: grid;
+  gap: var(--space-8);
+  scroll-margin-top: var(--nav-h);
+}
+.lp-section + .lp-section {
+  border-top: var(--hair) solid var(--border);
+}
+.lp-h2 {
+  margin: 0 0 var(--space-5);
+  font-size: clamp(1.75rem, 3.2vw, 2.75rem);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.lp-h2 small {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+/* The rule under a heading draws from the left after the words. */
+.lp-h2::after {
+  content: '';
+  display: block;
+  height: var(--frame);
+  margin-top: var(--space-4);
+  background: var(--rule);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-plot) var(--ease-plot) 250ms;
+}
+.lp-h2.is-in::after {
+  transform: scaleX(1);
+}
+.lp-p {
+  margin: 0 0 var(--space-4);
+  max-width: 62ch;
+  font-family: var(--font-text);
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: var(--text-dim);
+}
+.lp-formula {
+  display: inline-block;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--hair) solid var(--rule);
+  background: var(--surface);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Plotted in: a wipe along the reading direction. */
+.plot {
+  clip-path: inset(-0.5em 100% -0.5em -0.2em);
+  transition: clip-path 800ms var(--ease-plot) var(--plot-delay, 0ms);
+}
+.plot.is-in {
+  clip-path: inset(-0.5em -0.2em);
+}
+tr.plot {
+  clip-path: none;
+  opacity: 0;
+  transition: opacity 500ms ease var(--plot-delay, 0ms);
+}
+tr.plot.is-in {
+  opacity: 1;
+}
+
+/* Method: the section drawing */
+.lp-diagram {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: var(--hair) solid var(--rule);
+}
+.lp-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.lp-diagram figcaption {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: var(--hair) solid var(--border);
+  font-size: 0.875rem;
+  color: var(--text-dim);
+}
+.dg-ray {
+  stroke: var(--sun-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 7 5;
+}
+.dg-sun circle {
+  fill: var(--sun);
+}
+.dg-sun line {
+  stroke: var(--sun-line);
+  stroke-width: 2;
+}
+.dg-volume {
+  fill: var(--accent-soft);
+}
+.dg-shadow {
+  fill: var(--ink);
+}
+.dg-ground {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.dg-building {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.dg-floor {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.dg-dim line,
+.dg-dim path {
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.dg-dim text,
+text.dg-text {
+  fill: var(--ink);
+  /* A paper halo keeps a label readable where it crosses a line. */
+  stroke: var(--surface);
+  stroke-width: 5px;
+  paint-order: stroke;
+  font: 600 14px var(--font);
+}
+.dg-dim text.dg-strong {
+  font-size: 17px;
+  font-weight: 700;
+}
+.dg-walker {
+  color: var(--sun-text);
+  transition: color var(--dur-slow) ease;
+}
+.dg-walker.is-shaded {
+  color: var(--accent);
+}
+.dg-walker circle {
+  fill: currentColor;
+}
+.dg-walker path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dg-walker text {
+  fill: currentColor;
+  stroke: var(--surface);
+  stroke-width: 5px;
+  paint-order: stroke;
+  font: 700 14px var(--font);
+}
+/* On a phone the drawing is half size, so its lettering is doubled. */
+@media (max-width: 720px) {
+  .dg-dim text,
+  text.dg-text,
+  .dg-walker text {
+    font-size: 25px;
+  }
+  .dg-dim text.dg-strong {
+    font-size: 28px;
+  }
+}
+
+/* Best time chart (also used in the planner sheet) */
+.best {
+  --best-h: 240px;
+}
+.best-chart {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+.best-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: var(--best-h);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: end;
+  line-height: 1;
+}
+.best-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+}
+.best-bars li > span,
+.best-bars li > button {
+  display: grid;
+  grid-template-rows: var(--best-h) auto;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.best-col {
+  position: relative;
+  display: block;
+  border-bottom: var(--frame) solid var(--rule);
+  background: linear-gradient(var(--border), var(--border)) 0 50% / 100% 1px no-repeat;
+}
+.best-bar {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  bottom: 0;
+  height: calc(var(--v) * 100%);
+  background: color-mix(in srgb, var(--accent) 42%, var(--surface));
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition:
+    transform 600ms var(--ease-plot),
+    background-color var(--dur-slow) ease;
+}
+/* Each bar rises as its hour is computed. */
+.best.is-in .has-bar .best-bar {
+  transform: scaleY(1);
+}
+.is-best .best-bar {
+  background: var(--accent);
+}
+.best-alt {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: calc(var(--alt) * 100% - 1px);
+  height: 2px;
+  background: var(--ink);
+  opacity: 0;
+  transition: opacity 300ms ease 500ms;
+}
+.best.is-in .has-bar .best-alt {
+  opacity: 1;
+}
+.is-empty .best-col {
+  background: repeating-linear-gradient(135deg, transparent 0 5px, var(--border) 5px 6px);
+}
+.best-hour {
+  padding-top: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: center;
+}
+.is-best .best-hour {
+  color: var(--text);
+  font-weight: 700;
+}
+.best-bars button {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .best-bars button:hover .best-bar {
+    background: var(--accent);
+  }
+}
+.best-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: var(--space-3) 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+.best-legend span {
+  display: inline-flex;
+  align-items: center;
+}
+.best-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-5);
+  margin: var(--space-3) 0 0;
+  min-height: 1.6em;
+  color: var(--text-dim);
+}
+.best-result strong {
+  font-size: 1.25rem;
+  color: var(--text);
+}
+.lp-best-chart {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: var(--hair) solid var(--rule);
+}
+.lp-best-axis {
+  margin: 0 0 var(--space-4);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Night */
+.lp-night {
+  background: var(--bg);
+  color: var(--text);
+  display: grid;
+  scroll-margin-top: var(--nav-h);
+}
+.lp-night-plan {
+  position: relative;
+  height: 62vh;
+  min-height: 360px;
+  border-bottom: var(--hair) solid var(--border);
+}
+.lp-night-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.lp-night-legend {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  margin: 0;
+  padding: 6px var(--space-3);
+  background: var(--surface);
+  border: var(--hair) solid var(--border);
+  font-size: 0.8125rem;
+  display: flex;
+  align-items: center;
+}
+.lp-night-text {
+  padding: var(--space-10) var(--space-5) var(--space-12);
+}
+
+/* Definition schedules: term, then what it means. */
+.lp-defs {
+  margin: var(--space-6) 0 0;
+  display: grid;
+}
+.lp-def {
+  display: grid;
+  gap: var(--space-1) var(--space-6);
+  padding: var(--space-4) 0;
+  border-top: var(--hair) solid var(--border);
+}
+.lp-def:last-child {
+  border-bottom: var(--hair) solid var(--border);
+}
+.lp-def dt {
+  font-weight: 700;
+  font-size: 1.0625rem;
+}
+.lp-def dd {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--text-dim);
+  max-width: 62ch;
+}
+
+/* Data */
+.lp-limits {
+  list-style: none;
+  margin: var(--space-5) 0 var(--space-6);
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  font-family: var(--font-text);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+.lp-limits li {
+  position: relative;
+  padding-inline-start: var(--space-6);
+}
+.lp-limits li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 9px;
+  height: 9px;
+  border: var(--frame) solid var(--ink);
+}
+.lp-more {
+  width: auto;
+}
+.lp-table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: var(--hair) solid var(--rule);
+}
+.lp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+.lp-table th,
+.lp-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: start;
+  vertical-align: top;
+  line-height: 1.45;
+}
+.lp-table thead th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: var(--frame) solid var(--rule);
+  white-space: nowrap;
+}
+.lp-table tbody tr + tr > * {
+  border-top: var(--hair) solid var(--border);
+}
+.lp-table tbody th {
+  font-weight: 600;
+}
+.lp-table .num {
+  text-align: end;
+}
+.lp-table td:nth-child(3) {
+  color: var(--text-dim);
+}
+@media (max-width: 640px) {
+  .lp-table th:nth-child(4),
+  .lp-table td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* Team */
+.lp-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+.lp-people li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.lp-people img {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: var(--hair) solid var(--rule);
+  border-radius: var(--radius);
+}
+.lp-person {
+  min-width: 0;
+  display: grid;
+  line-height: 1.45;
+}
+.lp-person-role {
+  font-size: 1rem;
+  color: var(--text-dim);
+}
+.lp-person-description {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-text);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+/* Closing title block */
+.lp-foot {
+  border-top: var(--frame) solid var(--rule);
+  padding: 0 var(--space-5) calc(var(--space-10) + var(--safe-b));
+}
+.lp-foot-cta {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-12) 0 var(--space-10);
+  display: grid;
+  gap: var(--space-6);
+}
+.lp-foot-cta p {
+  margin: 0;
+  font-size: clamp(2rem, 5.2vw, 4rem);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lp-foot-cta .btn {
+  width: auto;
+  justify-self: start;
+  min-width: min(320px, 100%);
+}
+.lp-foot-block {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  border: var(--frame) solid var(--rule);
+  background: var(--surface);
+}
+.lp-foot-block > div {
+  padding: var(--space-3) var(--space-4);
+}
+.lp-foot-block > div + div {
+  border-top: var(--hair) solid var(--border);
+}
+.lp-foot-block dt {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+.lp-foot-block dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.lp-foot-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 1.125rem;
+}
+.lp-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+}
+.lp-foot-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+}
+
+@media (min-width: 960px) {
+  .lp-section {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--space-12);
+    padding: 128px var(--space-8);
+    align-items: start;
+  }
+  /* The text column stays in view while its figure scrolls past. */
+  .lp-section > .lp-text {
+    position: sticky;
+    top: calc(var(--nav-h) + var(--space-10));
+  }
+  .lp-team {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  }
+  .lp-team > .lp-h2 {
+    position: sticky;
+    top: calc(var(--nav-h) + var(--space-10));
+  }
+  .lp-def {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .lp-diagram,
+  .lp-best-chart {
+    padding: var(--space-6);
+  }
+  .best {
+    --best-h: 300px;
+  }
+  .lp-night {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    min-height: 150vh;
+  }
+  /* The night plan is held while the text scrolls past it. */
+  .lp-night-plan {
+    position: sticky;
+    top: var(--nav-h);
+    height: calc(100vh - var(--nav-h));
+    border-bottom: 0;
+    border-inline-end: var(--hair) solid var(--border);
+  }
+  .lp-night-text {
+    padding: 22vh var(--space-10) 24vh;
+  }
+  .lp-night .lp-def {
+    grid-template-columns: 1fr;
+  }
+  .lp-people {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-content: start;
+  }
+  .lp-people li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .lp-people img {
+    width: 96px;
+    height: 96px;
+  }
+  .lp-foot {
+    padding-inline: var(--space-8);
+  }
+  .lp-foot-block {
+    grid-template-columns: 1fr 1.2fr 2.2fr 1.4fr;
+  }
+  .lp-foot-block > div + div {
+    border-top: 0;
+    border-inline-start: var(--hair) solid var(--border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plot,
+  tr.plot {
+    clip-path: none;
+    opacity: 1;
+  }
+  .lp-h2::after,
+  .best-bar {
+    transform: none;
+  }
+  .best-alt {
+    opacity: 1;
+  }
+  .titleblock .tb-row,
+  .caption-phase {
+    animation: none;
+  }
+}
+
+/* ---------- Review fixes ---------- */
+/* The sun's bearing, next to the north arrow. */
+.stage-sun {
+  position: absolute;
+  z-index: 2;
+  left: calc(var(--space-4) + var(--safe-l) + 40px);
+  top: calc(var(--nav-h) + var(--safe-t) + 54px);
+  width: 54px;
+  height: 54px;
+  pointer-events: none;
+}
+.stage-sun g {
+  transition: transform 300ms linear;
+}
+.sun-disc {
+  fill: var(--sun);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.sun-ray {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.timebar-sun {
+  position: absolute;
+  top: 24px;
+  width: 0;
+  height: 24px;
+  border-left: 1px dashed var(--rule);
+  pointer-events: none;
+}
+.tb-figs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-3);
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.tb-figs .key {
+  margin-inline-end: 0;
+}
+.lp-table th small {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+/* Phones: the plan keeps at least half of the first screen. */
+@media (max-width: 959px) {
+  .tb-sub {
+    display: none;
+  }
+  .tb-main {
+    padding-block: var(--space-4) var(--space-3);
+  }
+  .tb-actions {
+    margin-top: var(--space-3);
+  }
+  .tb-actions .btn--ghost {
+    min-height: var(--tap);
+    border-color: transparent;
+    justify-content: flex-start;
+    padding-inline: 0;
+    font-size: 0.9375rem;
+    color: var(--text-dim);
+  }
+}
+@media (min-width: 960px) {
+  .tb-figs {
+    display: none;
+  }
+  .stage-sun {
+    left: calc(var(--space-6) + 46px);
+    top: calc(var(--nav-h) + var(--space-5));
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* The north arrow and the sun's bearing sit on their own small plates, so they read over any part of the plan. */
+.stage-north,
+.stage-sun {
+  box-sizing: content-box;
+  padding: 5px;
+  background: var(--surface);
+  border: var(--hair) solid var(--rule);
+}
+.stage-sun {
+  left: calc(var(--space-4) + var(--safe-l) + 48px);
+  top: calc(var(--nav-h) + var(--safe-t) + 60px);
+  width: 42px;
+  height: 42px;
+}
+@media (min-width: 960px) {
+  .stage-sun {
+    left: calc(var(--space-6) + 54px);
+    top: calc(var(--nav-h) + var(--space-6));
+    width: 50px;
+    height: 50px;
+  }
+}

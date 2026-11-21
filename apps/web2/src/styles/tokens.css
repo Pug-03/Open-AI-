@@ -1,0 +1,144 @@
+/* ============ Walk We v2: design tokens ============
+   World: an architect's shadow study. By day the sheet is pale blue drafting
+   paper with navy ink (reads in direct sun); at night it turns to navy with
+   pale ink (does not blind). Components use the semantic names only.
+   Contrast is checked in tokens.test.ts: key text >= 7:1, the rest >= 4.5:1. */
+
+:root {
+  /* Brand palette (PRODUCT.md) */
+  --navy-950: #071528;
+  --navy-900: #0b1f3a;
+  --navy-800: #10294b;
+  --navy-700: #17355e;
+  --blue-700: #1e4fa8;
+  --blue-500: #3b82f6;
+  --sky-300: #7cc4f5;
+  --sky-100: #d6e8fb;
+  --sky-50: #eef6ff;
+  --amber-500: #f5a524;
+  --amber-700: #8a5200;
+  --red-500: #e5484d;
+  /* White on red-500 is 3.9:1, so text-bearing SOS surfaces use this red. */
+  --red-700: #b4232a;
+  --white: #ffffff;
+
+  /* Shape: soft rounded corners. */
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --radius-pill: 999px;
+  --hair: 1px;
+  --frame: 2px;
+
+  /* Rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 48px;
+  --space-12: 72px;
+  --tap: 48px; /* minimum touch target */
+
+  /* Motion: things are plotted, not bounced. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-plot: cubic-bezier(0.65, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 300ms;
+  --dur-plot: 900ms;
+
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+
+  /* Lettering and figures / running text. */
+  --font: 'Bai Jamjuree', 'Noto Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-text: 'Sarabun', 'Bai Jamjuree', 'Noto Sans Thai', system-ui, sans-serif;
+}
+
+/* Day sheet */
+:root,
+[data-theme='day'] {
+  color-scheme: light;
+  --bg: var(--sky-50);
+  --surface: var(--white);
+  --surface-2: #e2eefc;
+  --text: var(--navy-900);
+  --text-dim: #3a4f72;
+  --heading: var(--navy-900);
+  --ink: var(--navy-900);
+  --paper: var(--sky-50);
+  --primary-bg: var(--blue-700);
+  --primary-text: var(--white);
+  --accent: var(--blue-700);
+  --accent-soft: rgb(30 79 168 / 0.1);
+  --border: rgb(11 31 58 / 0.24);
+  --rule: var(--navy-900);
+  --focus: var(--blue-500);
+  --shade-line: var(--blue-700);
+  --sun-line: #d98200;
+  /* The lower-scoring stretch of a night route: dashed dim ink, never amber (amber is the sun's). */
+  --low-line: var(--text-dim);
+  --sun: var(--amber-500);
+  --sun-text: var(--amber-700);
+  --sos: var(--red-500);
+  --sos-bg: var(--red-700);
+  --scrim: rgb(7 21 40 / 0.5);
+  --shadow-1: 0 1px 2px rgb(11 31 58 / 0.1), 0 2px 6px rgb(11 31 58 / 0.08);
+  --shadow-2: 0 10px 28px -12px rgb(11 31 58 / 0.35);
+  --shadow-sheet: 0 -8px 28px -12px rgb(11 31 58 / 0.3);
+  /* The plan drawing */
+  --plan-ground: #e6f0fd;
+  --plan-building: var(--white);
+  --plan-line: rgb(11 31 58 / 0.55);
+  --plan-shadow: rgb(11 31 58 / 0.3);
+  --plan-road: rgb(11 31 58 / 0.3);
+  --plan-deck: rgb(30 79 168 / 0.2);
+}
+
+/* Night sheet */
+[data-theme='night'] {
+  color-scheme: dark;
+  --bg: var(--navy-900);
+  --surface: var(--navy-800);
+  --surface-2: var(--navy-700);
+  --text: var(--sky-50);
+  --text-dim: #a9c1e4;
+  --heading: var(--sky-50);
+  --ink: var(--sky-50);
+  --paper: var(--navy-900);
+  --primary-bg: var(--sky-300);
+  --primary-text: var(--navy-950);
+  --accent: var(--sky-300);
+  --accent-soft: rgb(124 196 245 / 0.14);
+  --border: rgb(214 232 251 / 0.26);
+  --rule: var(--sky-50);
+  --focus: var(--sky-300);
+  --shade-line: var(--sky-300);
+  --sun-line: var(--amber-500);
+  --low-line: rgb(214 232 251 / 0.75);
+  --sun: var(--amber-500);
+  --sun-text: #ffc861;
+  --sos: var(--red-500);
+  --sos-bg: var(--red-700);
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 10px 28px -12px rgb(0 0 0 / 0.7);
+  --shadow-sheet: 0 -8px 28px -12px rgb(0 0 0 / 0.7);
+  --plan-ground: #0d2442;
+  --plan-building: #12305a;
+  --plan-line: rgb(214 232 251 / 0.5);
+  --plan-shadow: rgb(3 10 22 / 0.55);
+  --plan-road: rgb(214 232 251 / 0.28);
+  --plan-deck: rgb(124 196 245 / 0.22);
+}
+
+/* iPhone mockup screenshots (main.tsx, ?mockup=iphone). */
+html.mockup-iphone {
+  --safe-t: 59px;
+  --safe-b: 34px;
+}

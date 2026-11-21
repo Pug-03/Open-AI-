@@ -1,0 +1,304 @@
+/* ============ Walk We v2: base ============
+   Reset, type, buttons and the browser's own surfaces, in the drawing-sheet
+   world: square corners, hairlines, solid ink actions. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  /* 100% = the user's own text size; sizes are in rem so system font scaling
+     (up to 200%) grows the UI instead of clipping it. */
+  font-size: 100%;
+  background: var(--bg);
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+html,
+body,
+#root {
+  min-height: 100dvh;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  overscroll-behavior: none;
+  overflow-x: clip;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--primary-text);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+input,
+textarea {
+  caret-color: var(--accent);
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .page-side .nowrap {
+    white-space: normal;
+  }
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Type ---------- */
+.h1 {
+  font-size: 1.875rem;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--heading);
+  margin: 0;
+  white-space: pre-line;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.h2 {
+  font-size: 1.375rem;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--heading);
+  margin: 0;
+  text-wrap: balance;
+}
+.h3 {
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  font-weight: 600;
+  margin: 0;
+}
+.sub {
+  font-family: var(--font-text);
+  font-size: 1.0625rem;
+  color: var(--text-dim);
+  margin: 0;
+}
+.small {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+  margin: 0;
+}
+.section-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-3) var(--space-6);
+  border: var(--hair) solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.btn--primary {
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  border-color: var(--primary-bg);
+}
+.btn--ghost {
+  background: transparent;
+}
+.btn--text {
+  background: transparent;
+  border-color: transparent;
+  width: auto;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  text-decoration-thickness: 1px;
+}
+@media (hover: hover) {
+  .btn:hover {
+    background: var(--surface-2);
+  }
+  .btn--primary:hover {
+    background: color-mix(in srgb, var(--primary-bg) 86%, var(--ink));
+  }
+  .btn--ghost:hover,
+  .btn--text:hover {
+    background: var(--accent-soft);
+  }
+}
+/* The arrow on a forward action slides along its own line. */
+.btn-arrow {
+  transition: transform var(--dur) var(--ease-out);
+}
+.btn:hover .btn-arrow {
+  transform: translateX(4px);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--radius);
+  border: var(--hair) solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition:
+    background var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
+}
+.icon-btn:active {
+  transform: translateY(1px);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+@media (hover: hover) {
+  .icon-btn:hover {
+    background: var(--surface-2);
+  }
+}
+
+/* A figure with its unit, as written on a drawing: 12 นาที, 900 ม. */
+.fig {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.unit {
+  font-size: 0.6em;
+  font-weight: 600;
+  margin-inline-start: 0.2em;
+}
+
+/* ---------- The mark ---------- */
+.logo-mark {
+  flex: none;
+  display: block;
+}
+.logo-tile {
+  fill: var(--navy-900);
+}
+.logo-ink {
+  stroke: var(--sky-50);
+}
+.logo-shade {
+  stroke: var(--sky-300);
+}
+.logo-sun {
+  fill: var(--amber-500);
+}
+[data-theme='night'] .logo-tile {
+  fill: var(--navy-700);
+}
+.logo-mark--bare .logo-ink {
+  stroke: var(--ink);
+}
+.logo-mark--bare .logo-shade {
+  stroke: var(--accent);
+}
+
+/* Swatches for legends: what a line on the drawing means. */
+.key {
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 5px;
+  margin-inline-end: var(--space-2);
+  vertical-align: middle;
+  background: var(--shade-line);
+}
+.key--bad {
+  background: var(--sun-line);
+}
+/* Night routes: the lower-scoring stretch is dashed pale ink (amber is the sun's). */
+.key--low {
+  height: 0;
+  background: none;
+  border-top: 3px dashed var(--low-line);
+}
+.key--alt {
+  height: 0;
+  background: none;
+  border-top: 2px dashed var(--ink);
+}
+.key--tick {
+  height: 2px;
+  background: var(--ink);
+}
+.key--cctv {
+  width: 7px;
+  height: 7px;
+  background: var(--sky-300);
+}
