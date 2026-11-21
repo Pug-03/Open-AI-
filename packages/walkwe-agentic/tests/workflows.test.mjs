@@ -99,6 +99,36 @@ test("Planner must read stress evidence and get a Critic verdict before verified
   assert.match(verified.text, /ไม่มีข้อมูลไฟ/);
 });
 
+test("Planner batches a confirmed night snapshot and reaches Critic in two Planner calls", async () => {
+  const result = replay();
+  const draft = finish(result);
+  let calls = 0;
+  const engine = createWorkflows({ model: {
+    async turn(role, { input, tools }) {
+      if (role === "critic") {
+        if (input.length === 1) return toolCall("get_segment_evidence", { segment_ids: ["lane-gap"], factor: "lighting" }, "critic-read");
+        assert.equal(JSON.parse(input.at(-1).output).data.rows[0].value, null);
+        return reviewed(draft);
+      }
+      if (++calls === 1) {
+        assert.ok(tools.some(tool => tool.name === "get_trip_snapshot"));
+        return toolCall("get_trip_snapshot", {}, "snapshot");
+      }
+      const envelope = JSON.parse(input.at(-1).output);
+      assert.equal(envelope.dataset_version, result.datasetVersion);
+      assert.equal(envelope.data.stress.recommended_route_id, result.recommendedId);
+      assert.equal(envelope.data.deciding_evidence[0].value, null);
+      assert.equal(envelope.data.clarification.id, "night_lighting_preference");
+      return toolCall("finish_trip", draft, "finish");
+    },
+  } });
+  const response = await engine.plan(night, { useModel: true });
+  assert.equal(response.source, "verified_planner");
+  assert.equal(response.loop.plannerSteps, 2);
+  assert.equal(response.loop.criticCalls, 1);
+  assert.ok(response.trace.some(entry => entry.step === "critic" && entry.passed));
+});
+
 test("Critic feedback is returned to the Planner for one bounded rewrite", async () => {
   const result = replay();
   const calls = nightCalls(result);

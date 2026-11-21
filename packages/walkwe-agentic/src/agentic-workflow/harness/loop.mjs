@@ -2,13 +2,15 @@ import { safeDraftText, verifyFinish } from "../../../../verify/index.mjs";
 import { agentConfig } from "../../config.mjs";
 import { byteLength, instructions } from "../context.mjs";
 import { worthwhileDetour } from "../../routing/core.mjs";
-import { criticTools, plannerTools, validToolArgs } from "./contracts.mjs";
+import { criticTools, plannerTools, tripSnapshotTool, validToolArgs } from "./contracts.mjs";
 
 export const loopLimits = Object.freeze({
   plannerSteps: agentConfig.plannerMaxSteps, toolCalls: agentConfig.plannerMaxTools,
   rejectedFinishes: agentConfig.plannerMaxRetries, deadlineMs: agentConfig.plannerTimeoutMs,
 });
 const replayByteLimit = 96_000;
+const harnessTools = [tripSnapshotTool, ...plannerTools];
+const plannerInstructions = "Start with get_trip_snapshot. It performs the routing, stress test, required evidence read, and any required ask_user step described below. After it succeeds, submit finish_trip using the returned values. Do not repeat those tools or call critic_review unless you need a specific additional check. Use the individual tools when you need more evidence. " + instructions.planner;
 
 async function beforeDeadline(work, signal) {
   signal.throwIfAborted();
@@ -172,7 +174,56 @@ export async function runPlannerHarness({
   };
   const remember = record => { seenEvidence.set(record.evidence_id, record); };
   const routeArgs = args => args.route_ids.every(id => routeSet.has(id));
+  const readRoutes = () => result.routes.map(route => {
+    const row = {
+      route_id: route.id, evidence_id: itineraryRef(route), metrics: routeMetrics(route),
+      segment_ids: route.segments.map(segment => segment.id), trust: cardTrust(route, depends),
+    };
+    remember({ evidence_id: row.evidence_id, route_id: route.id, factor: "route", value: row.metrics, dataset_version: result.datasetVersion });
+    return row;
+  });
+  const readStress = () => ({
+    mode: result.mode, flips: result.stress.flipped, decision: result.decision, verdict: result.stress.flipped ? "recommend_with_caveat"
+      : result.recommendedId === result.shortestId ? "shortest_is_best" : "recommend",
+    recommended_route_id: result.recommendedId,
+    winner_if_unknown_lit: result.stress.optimisticId ?? result.recommendedId,
+    winner_if_unknown_dark: result.stress.pessimisticId ?? result.recommendedId,
+    depends_on: depends.map(segment_id => ({ segment_id })),
+    ask_preference: questionNeeded,
+  });
+  const readSegments = (ids, factor) => {
+    const rows = evidenceRows(result.routes, evidence, ids, factor, result.datasetVersion);
+    for (const row of rows) remember(row);
+    loop.evidenceReads += rows.length;
+    return rows;
+  };
+  const stageQuestion = () => {
+    const english = request.language === "en";
+    question = {
+      id: "night_lighting_preference", choices: ["direct", "prefer_evidence"],
+      text: english ? "Take the direct route or prefer the route with more lighting evidence?"
+        : "ต้องการเดินทางตรงหรือเลือกทางที่มีข้อมูลไฟมากกว่า?",
+      options: [
+        { label: english ? "Direct route" : "เดินทางตรง", ref: result.stress.optimisticId },
+        { label: english ? "More lighting evidence" : "มีข้อมูลไฟมากกว่า", ref: result.stress.pessimisticId },
+      ],
+    };
+  };
   const runTool = async (name, args) => {
+    if (name === "get_trip_snapshot") {
+      const routes = readRoutes();
+      const stress = readStress();
+      const rows = readSegments(depends, "lighting");
+      trace.push({ step: "plan_routes", status: "ok", via: name }, { step: "stress_test_route", status: "ok", via: name });
+      if (rows.length) {
+        trace.push({ step: "get_segment_evidence", status: "ok", via: name, evidenceIds: rows.map(row => row.evidence_id) });
+      }
+      if (questionNeeded && !question) {
+        stageQuestion();
+        trace.push({ step: "ask_user", status: "no_data", via: name });
+      }
+      return envelope("ok", { routes, shortest_route_id: result.shortestId, stress, deciding_evidence: rows, clarification: question });
+    }
     if (name === "find_place") {
       const query = args.query.trim().toLocaleLowerCase("en");
       const candidates = places.filter(place => query && [place.id, place.name, place.en].some(value => value.toLocaleLowerCase("en").includes(query)))
@@ -183,16 +234,7 @@ export async function runPlannerHarness({
       if (args.origin.place_id !== request.from || args.destination_place_id !== request.to
         || !["now", request.depart_at].includes(args.depart_at) || ![request.mode, "auto"].includes(args.mode)
         || args.avoid_stairs !== request.noStairs) return problem("confirmed_request_mismatch");
-      const routes = result.routes.map(route => {
-        const row = {
-          route_id: route.id, evidence_id: itineraryRef(route), metrics: routeMetrics(route),
-          segment_ids: route.segments.map(segment => segment.id),
-          trust: cardTrust(route, depends),
-        };
-        remember({ evidence_id: row.evidence_id, route_id: route.id, factor: "route", value: row.metrics, dataset_version: result.datasetVersion });
-        return row;
-      });
-      return envelope("ok", { routes, shortest_route_id: result.shortestId });
+      return envelope("ok", { routes: readRoutes(), shortest_route_id: result.shortestId });
     }
     if (name === "get_weather" || name === "create_collection_task") return envelope("no_data");
     if (!routed()) return problem("plan_routes_first");
@@ -213,15 +255,7 @@ export async function runPlannerHarness({
     }
     if (name === "stress_test_route") {
       if (!sameIds(args.route_ids, [...routeSet.keys()])) return problem("use_all_returned_routes");
-      return envelope("ok", {
-        mode: result.mode, flips: result.stress.flipped, decision: result.decision, verdict: result.stress.flipped ? "recommend_with_caveat"
-          : result.recommendedId === result.shortestId ? "shortest_is_best" : "recommend",
-        recommended_route_id: result.recommendedId,
-        winner_if_unknown_lit: result.stress.optimisticId ?? result.recommendedId,
-        winner_if_unknown_dark: result.stress.pessimisticId ?? result.recommendedId,
-        depends_on: depends.map(segment_id => ({ segment_id })),
-        ask_preference: questionNeeded,
-      });
+      return envelope("ok", readStress());
     }
     if (name === "rank_unknowns") {
       const items = rankUnknowns?.(args.route_ids.map(id => routeSet.get(id)), args.factor, args.limit) ?? [];
@@ -236,25 +270,13 @@ export async function runPlannerHarness({
       return envelope("ok", { ...proposed, evidence_id: record.evidence_id });
     }
     if (name === "get_segment_evidence") {
-      const rows = evidenceRows(result.routes, evidence, args.segment_ids, args.factor, result.datasetVersion);
-      for (const row of rows) remember(row);
-      loop.evidenceReads += rows.length;
-      return envelope("ok", { rows });
+      return envelope("ok", { rows: readSegments(args.segment_ids, args.factor) });
     }
     if (name === "ask_user") {
       if (!stressTested() || args.kind !== "preference" || !questionNeeded || question
         || !safeDraftText(args.text, 160) || !sameIds(args.options.map(option => option.ref), [result.stress.optimisticId, result.stress.pessimisticId])
         || args.options.some(option => !safeDraftText(option.label, 60))) return problem("invalid_clarification");
-      const english = request.language === "en";
-      question = {
-        id: "night_lighting_preference", choices: ["direct", "prefer_evidence"],
-        text: english ? "Take the direct route or prefer the route with more lighting evidence?"
-          : "ต้องการเดินทางตรงหรือเลือกทางที่มีข้อมูลไฟมากกว่า?",
-        options: [
-          { label: english ? "Direct route" : "เดินทางตรง", ref: result.stress.optimisticId },
-          { label: english ? "More lighting evidence" : "มีข้อมูลไฟมากกว่า", ref: result.stress.pessimisticId },
-        ],
-      };
+      stageQuestion();
       return envelope("no_data", { chosen_ref: null, waiting_for_user: true });
     }
     if (name === "critic_review") {
@@ -273,8 +295,8 @@ export async function runPlannerHarness({
     while (loop.plannerSteps < loopLimits.plannerSteps) {
       if (byteLength(input) > replayByteLimit) return finish("fallback", "context_budget");
       loop.plannerSteps += 1;
-      const output = await beforeDeadline(() => model.turn("planner", { instructions: instructions.planner, input, tools: plannerTools, signal }), signal);
-      const { action, args, reason } = parseCall(output, plannerTools, callIds);
+      const output = await beforeDeadline(() => model.turn("planner", { instructions: plannerInstructions, input, tools: harnessTools, signal }), signal);
+      const { action, args, reason } = parseCall(output, harnessTools, callIds);
       if (reason) return finish("fallback", reason);
       if (++loop.toolCalls > loopLimits.toolCalls) return finish("fallback", "planner_tool_limit");
       const key = signature(action.name, args);

@@ -40,6 +40,8 @@ const readEvidence = tool("get_segment_evidence", "Read facts about segments ret
   segment_ids: ids(40, 1), factor: stringEnum(...segmentFactors),
 });
 const routeIds = ids(6, 1);
+export const tripSnapshotTool = tool("get_trip_snapshot",
+  "Read the confirmed trip's routes, stress test, deciding evidence and any required user clarification in one call.", {});
 export const plannerTools = [
   tool("find_place", "Look up a confirmed place in the pilot catalogue.", { query: string(80), near_place_id: nullableId }),
   tool("plan_routes", "Get candidate routes for the confirmed origin, destination, departure and constraints.", {
