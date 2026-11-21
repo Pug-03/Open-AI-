@@ -9,6 +9,7 @@ import {
   RoutingError,
   type NightFactor,
   type Route,
+  type RouteEvidenceSegment,
   type RouteKind,
   type RouteRequest,
   type RouteResult,
@@ -134,7 +135,7 @@ export class AreaRouter implements RoutingEngine {
     return { perEdge, active };
   }
 
-  routeSync(req: RouteRequest): RouteResult {
+  routeSync(req: RouteRequest, withEvidence = false): RouteResult {
     const { area } = this;
     const maxSnap = this.opts.maxSnapM ?? 300;
     const s = area.nearestNode(req.from.lat, req.from.lng, maxSnap);
@@ -193,7 +194,13 @@ export class AreaRouter implements RoutingEngine {
     }
 
     const snapM = { from: s.dist, to: t.dist };
-    const described = found.map((f) => ({ kinds: f.kinds, route: this.describe(f.kinds, f.path, req, sun, sunWeight > 0, factors, incidents, snapM) }));
+    const described = found.map((f) => ({
+      kinds: f.kinds,
+      route: {
+        ...this.describe(f.kinds, f.path, req, sun, sunWeight > 0, factors, incidents, snapM),
+        ...(withEvidence ? { evidence: this.pathEvidence(f.path, snapM, sunWeight > 0 ? sun : null) } : {}),
+      },
+    }));
     // Fold alternatives that aren't meaningfully better than the shortest.
     const base = described[0]!;
     const kept = [base];
@@ -218,6 +225,37 @@ export class AreaRouter implements RoutingEngine {
       incidentsActive: active,
       snapM,
     };
+  }
+
+  segmentEvidence(edge: number): RouteEvidenceSegment | null {
+    if (!Number.isInteger(edge) || edge < 0 || edge >= this.area.edgeCount) return null;
+    const flags = this.area.eflags[edge]!;
+    const light = flags & WF.LIT_YES ? 'lit' : flags & WF.LIT_NO ? 'dark' : 'unknown';
+    return {
+      id: `edge:${edge}`, length: this.area.elen[edge]!, light,
+      name: this.area.input.walkways.ways[this.area.eway[edge]!]?.name
+        || this.area.input.malls[this.area.emall[edge]!]?.name || '',
+      noSidewalk: Boolean(flags & WF.NO_SIDEWALK),
+      method: light !== 'unknown' ? 'osm_lit_tag' : this.night.litKnown[edge] ? 'lamp_proximity' : 'no_data',
+      stairs: this.area.eclass[edge] === WALKWAY_CLASSES.indexOf('steps'),
+      covered: flags & (WF.COVERED | WF.INDOOR | WF.TUNNEL) ? 1 : 0,
+    };
+  }
+
+  private pathEvidence(path: Path, snap: RouteResult['snapM'], sun: SunPosition | null): RouteEvidenceSegment[] {
+    const unmapped = (id: string, length: number): RouteEvidenceSegment => ({
+      id, length, light: 'unknown', method: 'no_data', stairs: null, covered: 0,
+    });
+    const segments = path.edges.map(edge => {
+      const record = this.segmentEvidence(edge)!;
+      if (!sun) return record;
+      const { sun: exposure } = this.area.edgeShade(edge, sun);
+      const fraction = 1 - exposure.reduce((sum, value) => sum + value, 0) / exposure.length;
+      return { ...record, shaded: Math.min(1, Math.max(0, fraction)) };
+    });
+    if (snap.from > 1) segments.unshift(unmapped('snap:origin', snap.from));
+    if (snap.to > 1) segments.push(unmapped('snap:destination', snap.to));
+    return segments;
   }
 
   /** Indexes of malls closed at any point of the window after departure. */

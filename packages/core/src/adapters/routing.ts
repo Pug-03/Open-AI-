@@ -53,6 +53,18 @@ export interface RouteStep {
   mall: string | null;
 }
 
+export interface RouteEvidenceSegment {
+  id: string;
+  length: number;
+  name?: string;
+  noSidewalk?: boolean;
+  light: 'lit' | 'dark' | 'unknown';
+  method: 'osm_lit_tag' | 'lamp_proximity' | 'no_data';
+  stairs: boolean | null;
+  covered: number;
+  shaded?: number;
+}
+
 export interface Route {
   /** Every label this path earns (identical paths are merged); first is primary. */
   kinds: RouteKind[];
@@ -76,6 +88,8 @@ export interface Route {
   incidentsOnRoute: number;
   /** Metres of stairs on the path (0 = step-free, as far as the map knows). */
   stairsM: number;
+  /** Present when the caller requests evidence for route results. */
+  evidence?: RouteEvidenceSegment[];
 }
 
 export interface RouteResult {

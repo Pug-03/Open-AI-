@@ -26,7 +26,14 @@ test.beforeEach(async ({ page, context }) => {
   await context.route(/api\.open-meteo\.com/, (route) => route.fulfill({ json: cloud(10) }));
 });
 
-test('daytime: route cards with shade, and shade/sun runs drawn on the map', async ({ page }) => {
+test('daytime: routes, mapped shade evidence and AI fallback', async ({ page }) => {
+  await page.route('**/route-evidence', async (route) => {
+    const request = route.request().postDataJSON();
+    expect(request.mode).toBe('day');
+    expect(Object.keys(request).sort()).toEqual(['candidates', 'mode']);
+    expect(Object.keys(request.candidates[0]).sort()).toEqual(['id', 'kind', 'meters', 'reason']);
+    await route.fulfill({ json: { ids: [999] }, headers: { 'access-control-allow-origin': '*' } });
+  });
   await page.clock.install({ time: new Date('2026-10-15T14:00:00+07:00') });
   await page.clock.resume(); // start at that time, then let it run like a real clock
   await page.goto('/plan');
@@ -48,11 +55,29 @@ test('daytime: route cards with shade, and shade/sun runs drawn on the map', asy
   await expect.poll(async () => Number(await map.getAttribute('data-shade-runs')), { timeout: 10_000 }).toBeGreaterThan(0);
   await expect.poll(async () => Number(await map.getAttribute('data-sun-runs')), { timeout: 10_000 }).toBeGreaterThan(0);
 
+  const evidence = page.getByTestId('route-evidence');
+  await expect(evidence).toBeVisible();
+  await expect(evidence).toContainText('ร่มเงาเป็นค่าคำนวณ');
+  await evidence.getByText('ดูหลักฐานรายช่วง').click();
+  await expect(evidence.locator('details')).toHaveAttribute('open', '');
+  if (process.env.VITE_AI_PROXY_URL) {
+    await evidence.getByRole('button', { name: 'ให้ AI เลือกหลักฐานเด่น' }).click();
+    await expect(evidence.getByRole('status')).toContainText('AI ยังใช้ไม่ได้');
+    await expect(page.getByTestId('start-nav')).toBeEnabled();
+  }
   await expect(page.getByText(/ความสูงอาคาร \d+% เป็นค่าประมาณ/)).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
-test('scheduled for the evening: night mode is picked and explained', async ({ page }) => {
+test('scheduled for the evening: night lighting evidence and verified AI highlights', async ({ page }) => {
+  await page.route('**/route-evidence', async (route) => {
+    const { mode, candidates } = route.request().postDataJSON() as {
+      mode: string; candidates: { id: number; kind: string }[];
+    };
+    expect(mode).toBe('night');
+    const ids = [...new Map(candidates.map(({ kind, id }) => [kind, id])).values()];
+    await route.fulfill({ json: { ids }, headers: { 'access-control-allow-origin': '*' } });
+  });
   await page.clock.install({ time: new Date('2026-10-15T14:00:00+07:00') });
   await page.clock.resume(); // start at that time, then let it run like a real clock
   await page.goto('/plan');
@@ -66,6 +91,14 @@ test('scheduled for the evening: night mode is picked and explained', async ({ p
   await expect(page.locator('.route-option').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.route-option').first()).toContainText(/ปลอดภัยกว่า/);
   await expect(page.getByText('ปลอดภัยกว่า ไม่ใช่การรับประกัน')).toBeVisible();
+  const evidence = page.getByTestId('route-evidence');
+  await expect(evidence).toContainText(/ยังไม่ทราบ \d+ ม\./);
+  await expect(evidence).not.toContainText('ร่มเงา');
+  if (process.env.VITE_AI_PROXY_URL) {
+    await evidence.getByRole('button', { name: 'ให้ AI เลือกหลักฐานเด่น' }).click();
+    await expect(evidence.getByRole('button', { name: 'AI เลือกหลักฐานแล้ว' })).toBeDisabled();
+  }
+
   // Malls close at 21:00–22:00: the router reports skipping them.
   await expect(page.getByText(/เลี่ยงห้างที่ปิดอยู่ตอนนั้น/)).toBeVisible();
 });

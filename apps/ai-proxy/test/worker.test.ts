@@ -81,3 +81,45 @@ describe('ai-proxy worker', () => {
     expect((await call(env(), { body: body({ text: 'hi', lang: 'en' }) })).status).toBe(429);
   });
 });
+
+describe('route evidence ranking', () => {
+  const path = '/route-evidence';
+  const limit = async () => ({ success: true });
+  const enabled = env({ OPENAI_API_KEY: 'mock-key', RATE_LIMITER: { limit }, GLOBAL_LIMITER: { limit } });
+  const request = {
+    mode: 'night',
+    candidates: [
+      { id: 0, kind: 'go', reason: 'lit', meters: 100 },
+      { id: 1, kind: 'caution', reason: 'unknown-light', meters: 90 },
+    ],
+  };
+  const respond = (ids: number[]) => new Response(body({
+    status: 'completed',
+    output: [{ type: 'message', content: [{ type: 'output_text', text: body({ ids }) }] }],
+  }));
+
+  it('requires spend limits and rejects free text or coordinates before calling the provider', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await call(env({ OPENAI_API_KEY: 'mock-key' }), { path, body: body(request) })).status).toBe(503);
+    expect((await call(enabled, { path, body: body({ ...request, coordinates: [13, 100] }) })).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('passes only supplied IDs and rejects repeated, unknown or incomplete selections', async () => {
+    const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>();
+    vi.stubGlobal('fetch', fetchMock);
+    for (const ids of [[0, 0], [0, 2], [0]]) {
+      fetchMock.mockResolvedValueOnce(respond(ids));
+      expect((await call(enabled, { path, body: body(request) })).status).toBe(422);
+    }
+    fetchMock.mockResolvedValueOnce(respond([1, 0]));
+    const result = await call(enabled, { path, body: body(request) });
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({ ids: [1, 0] });
+    expect(result.headers.get('cache-control')).toBe('no-store');
+    const upstream = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(JSON.parse(upstream.input)).toEqual(request);
+    expect(upstream.store).toBe(false);
+  });
+});

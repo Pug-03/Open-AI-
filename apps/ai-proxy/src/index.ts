@@ -1,6 +1,7 @@
-// Walk We's optional text-to-speech proxy (Cloudflare Worker).
+// Walk We optional speech and evidence ranking proxy (Cloudflare Worker).
 
 import { z } from 'zod';
+import { rankEvidence } from './route-evidence';
 export interface Env {
   /** Comma-separated origins allowed to call this Worker, e.g. "https://walkwe.app,http://localhost:5173". */
   ALLOWED_ORIGINS: string;
@@ -13,6 +14,7 @@ export interface Env {
   /** ElevenLabs voice and model (wrangler.toml [vars]); both speak Thai and English. */
   ELEVENLABS_VOICE_ID?: string;
   ELEVENLABS_MODEL?: string;
+  OPENAI_API_KEY?: string;
 }
 
 /** /speak body: short text to read aloud (a navigation step, a route summary). */
@@ -72,9 +74,13 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cors = corsFor(req, env);
     if (!cors) return new Response('forbidden', { status: 403 });
-    if (new URL(req.url).pathname !== '/speak') return json({ error: 'not_found' }, 404, cors);
+    const path = new URL(req.url).pathname;
+    if (path !== '/speak' && path !== '/route-evidence') return json({ error: 'not_found' }, 404, cors);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
+    if (path === '/route-evidence' && (!env.OPENAI_API_KEY || !env.RATE_LIMITER || !env.GLOBAL_LIMITER)) {
+      return json({ error: 'unavailable' }, 503, cors);
+    }
 
     // Rate limit per client address (used only as a limiter key, never stored or logged).
     const who = req.headers.get('cf-connecting-ip') ?? 'unknown';
@@ -89,7 +95,12 @@ export default {
     }
 
     try {
-      return await speak(env, await readJson(req), cors);
+      const body = await readJson(req);
+      if (path === '/route-evidence') {
+        const result = await rankEvidence(body, env.OPENAI_API_KEY!);
+        return json(result.body, result.status, { ...cors, 'cache-control': 'no-store' });
+      }
+      return await speak(env, body, cors);
     } catch {
       return json({ error: 'bad_request' }, 400, cors);
     }

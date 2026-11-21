@@ -8,7 +8,7 @@ export type WireRequest = Omit<RouteRequest, 'departAt'> & { departAt: string };
 
 export type ToWorker =
   | { id: number; type: 'warm' }
-  | { id: number; type: 'route'; request: WireRequest }
+  | { id: number; type: 'route'; request: WireRequest; withEvidence?: boolean }
   | { id: number; type: 'scene'; bbox: readonly [number, number, number, number] }
   | { id: number; type: 'hourly'; request: WireRequest; times: string[] };
 

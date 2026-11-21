@@ -61,8 +61,8 @@ export class WorkerRoutingEngine implements RoutingEngine {
     return this.metaPromise;
   }
 
-  async route(request: RouteRequest): Promise<RouteResult> {
-    const m = await this.send({ type: 'route', request: { ...request, departAt: request.departAt.toISOString() } });
+  async route(request: RouteRequest, withEvidence = false): Promise<RouteResult> {
+    const m = await this.send({ type: 'route', withEvidence, request: { ...request, departAt: request.departAt.toISOString() } });
     if (m.type === 'result') return m.result;
     if (m.type === 'error' && (m.reason === 'outside-coverage' || m.reason === 'no-path')) throw new RoutingError(m.reason, m.message);
     throw new RoutingFailure(m.type === 'error' ? m.reason : 'internal', m.type === 'error' ? m.message : 'unexpected reply');

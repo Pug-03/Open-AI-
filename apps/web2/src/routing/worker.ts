@@ -1,9 +1,10 @@
 /// <reference lib="webworker" />
 import { activeCity } from '@walkwe/config';
-import { Area, AreaRouter, LocalProjection, modeForTime, RoutingError, sunPosition } from '@walkwe/core';
-import { areaDatasetSchema, incidentsDatasetSchema, JsonRepository, toAreaInput, withoutPlaceholders, type IncidentsDataset } from '@walkwe/data';
+import { type AreaRouter, LocalProjection, modeForTime, RoutingError, sunPosition } from '@walkwe/core';
+import { areaDatasetSchema, incidentsDatasetSchema, JsonRepository, withoutPlaceholders, type IncidentsDataset } from '@walkwe/data';
 import type { DatasetMeta, FromWorker, HourShade, LayerInfo, PlanScene, ToWorker } from './protocol.ts';
 import type { AreaDataset } from '@walkwe/data';
+import { createPilotRouter } from './pilotRouter.ts';
 
 // Loads the pilot dataset once, builds the graph, and answers route requests
 // off the UI thread so the sheet and map stay smooth while A* runs.
@@ -19,18 +20,8 @@ function load() {
   ]).then(([ds, inc0]) => {
     // Belt and braces: the build already strips placeholders; never use them in production.
     const inc = inc0 && import.meta.env.PROD ? withoutPlaceholders(inc0) : inc0;
-    const area = new Area(
-      toAreaInput(
-        ds,
-        (inc?.items ?? []).map((i) => ({ id: i.id, wayIds: i.wayIds, category: i.category, occurredOn: i.occurredOn, window: i.window, severity: i.severity })),
-      ),
-    );
-    const router = new AreaRouter(area, {
-      timeZone: activeCity.timezone,
-      defaultMallHours: activeCity.defaultMallHours,
-      walkSpeedMps: activeCity.walkSpeedMps,
-      incidents: { halfLifeDays: activeCity.incidents.halfLifeDays, outsideWindow: activeCity.incidents.outsideWindow },
-    });
+    const router = createPilotRouter(ds, inc);
+    const { area } = router;
     const L = ds.layers;
     const items = L.buildings.items;
     const sources = new Map<string, string>();
@@ -148,7 +139,7 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       });
       return post({ id: msg.id, type: 'hourly', hours });
     }
-    const result = router.routeSync({ ...msg.request, departAt: new Date(msg.request.departAt) });
+    const result = router.routeSync({ ...msg.request, departAt: new Date(msg.request.departAt) }, msg.withEvidence);
     post({ id: msg.id, type: 'result', result });
   } catch (err) {
     if (err instanceof RoutingError) post({ id: msg.id, type: 'error', reason: err.reason, message: err.message });

@@ -20,4 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:agentic
+      - run: npm run test:agentic:web2
+      - run: npm run eval:agentic
       - run: npm run build
