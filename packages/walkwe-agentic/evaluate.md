@@ -9,7 +9,7 @@
 | Mock Responses eval | 18/18 | Structured outputs, tool replay, fallback and 14 regression traps |
 | Live OpenAI on the source PR | 7/12 | Provider usage and latency for the imported engine. Both planner cases used the Worker fallback. |
 
-The saved [offline report](evals/eval_report.json) uses fixture dataset version `siam-sandbox-1`. See the [live run with per-case latency, tokens and estimated cost](../../docs/agentic/EVAL_2026-11-21.md).
+The saved [offline report](evals/eval_report.json) uses fixture dataset version `siam-sandbox-1`. See the [historical live run](../../docs/agentic/EVAL_2026-11-21.md) and the [12-case live rerun with per-case usage, latency, cost, and Critic trace](../../docs/agentic/EVAL_2026-11-21_RERUN.md).
 
 ## Run the checks
 
