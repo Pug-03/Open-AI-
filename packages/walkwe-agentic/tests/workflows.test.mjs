@@ -121,34 +121,63 @@ test("Planner must read stress evidence and get a Critic verdict before verified
   assert.match(verified.text, /ไม่มีข้อมูลไฟ/);
 });
 
-test("Planner batches a confirmed night snapshot and reaches Critic in two Planner calls", async () => {
-  const result = replay();
-  const draft = finish(result);
-  let calls = 0;
+for (const [mode, emphasis, wording] of [
+  ["night", "lighting_coverage", /ไม่มีข้อมูลไฟ.*มีข้อมูลว่ามีไฟ/],
+  ["day", "sun_exposure", /คาดว่าโดนแดด/],
+]) {
+  test(`Planner builds a verified ${mode} summary from the snapshot and reaches Critic in three model calls`, async () => {
+    const result = replay(mode);
+    const modelCalls = [];
+    const engine = createWorkflows({ model: {
+      async turn(role, { input, tools }) {
+        modelCalls.push(role);
+        if (role === "critic") {
+          assert.deepEqual(tools.map(item => item.name), ["finish_review"]);
+          const { draft, evidence } = JSON.parse(input[0].content);
+          assert.ok(draft.claims.every(claim => claim.evidence_ids.every(id =>
+            evidence.some(record => record.evidence_id === id && record.dataset_version === result.datasetVersion))));
+          if (mode === "night") assert.equal(evidence.find(record => record.evidence_id === "lane-gap").value, null);
+          return reviewed(draft);
+        }
+        if (modelCalls.length === 1) return toolCall("get_trip_snapshot", {}, "snapshot");
+        const envelope = JSON.parse(input.at(-1).output);
+        assert.equal(envelope.dataset_version, result.datasetVersion);
+        assert.equal(envelope.data.stress.recommended_route_id, result.recommendedId);
+        assert.ok(tools.some(item => item.name === "finish_from_snapshot"));
+        return toolCall("finish_from_snapshot", { emphasis }, "finish");
+      },
+    } });
+    const response = await engine.plan({ ...night, mode, time: mode === "day" ? "12:00" : "21:00" }, { useModel: true });
+    assert.equal(response.source, "verified_planner");
+    assert.deepEqual(modelCalls, ["planner", "planner", "critic"]);
+    assert.ok(response.trace.some(entry => entry.step === "verify" && entry.passed));
+    assert.ok(response.trace.some(entry => entry.step === "critic" && entry.passed));
+    assert.match(response.final.text, wording);
+  });
+}
+
+test("Snapshot Critic cannot accept claims with mismatched evidence IDs", async () => {
+  let plannerCalls = 0;
   const engine = createWorkflows({ model: {
-    async turn(role, { input, tools }) {
+    async turn(role, { input }) {
       if (role === "critic") {
-        if (input.length === 1) return toolCall("get_segment_evidence", { segment_ids: ["lane-gap"], factor: "lighting" }, "critic-read");
-        assert.equal(JSON.parse(input.at(-1).output).data.rows[0].value, null);
-        return reviewed(draft);
+        const { draft } = JSON.parse(input[0].content);
+        const [answer] = reviewed(draft);
+        const report = JSON.parse(answer.arguments);
+        report.claim_checks[0].evidence_ids = ["wrong-snapshot"];
+        return toolCall("finish_review", report, "bad-review");
       }
-      if (++calls === 1) {
-        assert.ok(tools.some(tool => tool.name === "get_trip_snapshot"));
-        return toolCall("get_trip_snapshot", {}, "snapshot");
-      }
-      const envelope = JSON.parse(input.at(-1).output);
-      assert.equal(envelope.dataset_version, result.datasetVersion);
-      assert.equal(envelope.data.stress.recommended_route_id, result.recommendedId);
-      assert.equal(envelope.data.deciding_evidence[0].value, null);
-      assert.equal(envelope.data.clarification.id, "night_lighting_preference");
-      return toolCall("finish_trip", draft, "finish");
+      plannerCalls += 1;
+      if (plannerCalls === 1) return toolCall("get_trip_snapshot", {}, "snapshot");
+      const emphasis = plannerCalls === 2 ? "lighting_coverage" : "duration";
+      return toolCall("finish_from_snapshot", { emphasis }, `finish-${plannerCalls}`);
     },
   } });
   const response = await engine.plan(night, { useModel: true });
-  assert.equal(response.source, "verified_planner");
-  assert.equal(response.loop.plannerSteps, 2);
-  assert.equal(response.loop.criticCalls, 1);
-  assert.ok(response.trace.some(entry => entry.step === "critic" && entry.passed));
+  assert.equal(response.source, "worker");
+  assert.equal(response.fallback, "critic_rejected");
+  assert.equal(response.loop.criticCalls, 2);
+  assert.ok(response.trace.filter(entry => entry.step === "critic").every(entry => !entry.passed));
 });
 
 test("Critic feedback is returned to the Planner for one bounded rewrite", async () => {

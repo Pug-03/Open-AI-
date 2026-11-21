@@ -42,6 +42,10 @@ const readEvidence = tool("get_segment_evidence", "Read facts about segments ret
 const routeIds = ids(6, 1);
 export const tripSnapshotTool = tool("get_trip_snapshot",
   "Read the confirmed trip's routes, stress test, deciding evidence and any required user clarification in one call.", {});
+export const finishSnapshotTool = mode => tool("finish_from_snapshot",
+  "Choose the useful emphasis for the verified route summary. Duration and any required lighting caveat are always included.", {
+    emphasis: stringEnum("duration", mode === "night" ? "lighting_coverage" : "sun_exposure"),
+  });
 export const plannerTools = [
   tool("find_place", "Look up a confirmed place in the pilot catalogue.", { query: string(80), near_place_id: nullableId }),
   tool("plan_routes", "Get candidate routes for the confirmed origin, destination, departure and constraints.", {
