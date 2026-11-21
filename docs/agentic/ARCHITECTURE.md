@@ -21,7 +21,7 @@ packages/
 
 The app resolves a Thai or English request to a draft and lets the user confirm the places. Routing evaluates an immutable snapshot for the chosen departure, walk constraints and opening hours. Code computes ETA, distance, shade and evidence coverage. At night the stress test varies the treatment of unknown lighting and records whether the recommendation changes. Daytime departure suggestions check the same deadline and compare walking exposure at five-minute intervals. Unknown lighting remains an explicitly missing value.
 
-Planner asks for route metrics, stress results and evidence through tools. The verifier checks draft claims against that snapshot and the trip constraints. Critic can read the associated evidence and return a reasoned rejection for a bounded retry. The app fills the final text from checked route metrics. When the model times out, exhausts its budget or returns an invalid proposal, deterministic routing and templates remain available.
+Planner can call `get_trip_snapshot` to read route metrics, stress results, and deciding evidence and prepare any required clarification in one turn. The verifier checks draft claims against that snapshot and the trip constraints. Critic can read the associated evidence and return a reasoned rejection for a bounded retry. The harness fills placeholders from checked route metrics. When the model times out, exhausts its budget or returns an invalid proposal, deterministic routing and templates remain available.
 
 ## During and after the trip
 
@@ -36,13 +36,17 @@ Planner asks for route metrics, stress results and evidence through tools. The v
 
 ## Deployment and integration status
 
-The base of this repository contains the Vite app at `apps/web2`, its browser worker at `apps/web2/src/routing/worker.ts`, and a speech proxy at `apps/ai-proxy` configured as `walkwe-ai-proxy-v2`. The Agentic Worker is available for local development inside `packages/walkwe-agentic`. The app's production route snapshot, trusted trip and reviewer identities, voice SDK callbacks, and durable review and SOS transports still need adapters. [Repository base](https://github.com/Pug-03/Open-AI-/commit/ebf42d588227e0a88106d82f0e672106b41ef773)
+The web2 Agentic development host uses the same AreaRouter, public landmarks, and Siam dataset as the Vite app in `apps/web2`. It strips placeholder incidents, fingerprints the routing data, and attaches road evidence without coordinates or contact data. It evaluates app-generated routes with the Agentic decision policy. OSM lighting tags are explicit evidence, while lamp proximity remains an estimate that the Agentic host treats as unknown lighting. Route IDs reference candidate paths in the current dataset version. [Client routing Worker](../../apps/web2/src/routing/worker.ts) · [Local host](../../apps/web2/agentic/routing.mjs)
+
+The local API exposes Intent, Planner, a grounded trip answer, departure suggestions, event-based Companion, evidence and news drafts, and optional signed ElevenLabs sessions. The read-only MCP server exposes evidence and demo replay against the same versioned dataset. The deployed app still needs a host with authorization and provider limits for remote calls. Live ElevenLabs SDK callbacks, reviewer identities, and durable review and delivery transports need staging integration. The existing speech proxy in `apps/ai-proxy` serves read-aloud, and the app's SOS confirmation remains in control of delivery.
 
 The local web2 build reproduced `worker-BqFbNug9.js` with the same SHA-256 as the captured deployment. Its app entry `index-DKoFog3E.js` differs from the captured `index-DYn_g4TT.js`. A Cloudflare deployment record is still needed to identify the exact full app commit and running proxy version.
 
 ## Local environment
 
 The Node preview binds to `127.0.0.1:4178`. Run `npm run agentic:dev` for its fixture mode and `npm run test:agentic` for the Node suite. Copy [the package example](../../packages/walkwe-agentic/.env.example) to `packages/walkwe-agentic/.env` for optional provider settings, then load it with Node's `--env-file`. The local Worker reads [its own dev vars](../../packages/walkwe-agentic/.dev.vars.example). The two continuation and authorization secrets require distinct values. The env examples contain blank secret values.
+
+From the repo root, run `npm run agentic:web2` for the canonical routing dataset. The local host accepts public place IDs such as `bts:CEN` and `osm:W157482067`. Send `POST /api/plan` with that pair in `request.from` and `request.to` and an `HH:mm` Bangkok departure in `request.time`. Run `npm run test:agentic:web2` to exercise the graph adapter and MCP without credentials. [Dot handoff](../../packages/walkwe-agentic/DOT.md)
 
 ### Local Worker contract
 
