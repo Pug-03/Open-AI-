@@ -63,7 +63,6 @@ npm run agentic:dev   # http://127.0.0.1:4178
 
 See the [Agentic architecture and env setup](docs/agentic/ARCHITECTURE.md) and
 the [OpenAI live eval report](docs/agentic/EVAL_2026-11-21.md).
-The [AI screen design](docs/agentic/UI_DESIGN.md) includes a standalone HTML prototype.
 
 ## Optional hosted speech
 
