@@ -343,7 +343,7 @@ A 56 px square in SOS Ground with a 2 px white border and floating shadow, fixed
 
 ### Motion
 - **Plotted in:** content wipes in with `clip-path` along the reading direction (500 to 800 ms welcome, 600 ms summary rows), staggered 60 to 120 ms per row. Rules and meters draw with `scaleX` from the left (300 ms in the app, 900 ms on the welcome page); chart bars rise with `scaleY` from the axis (600 ms). Easing is `--ease-plot` (cubic-bezier(0.65, 0, 0.2, 1)).
-- **Scroll-driven drawing:** on the welcome page the scroll (or a drag on the time ruler) is the clock. Shadows, routes and the day-to-night blend are redrawn per animation frame and eased toward the target rather than jumping.
+- **Scroll-driven drawing:** the Welcome plan starts at the current time. A scroll gesture moves one stage of the shadow study and finishes before the next gesture advances it. Dragging the time ruler updates the drawing directly. The drawing stops when the view is unchanged or offscreen.
 - **State changes:** 120 ms for press and hover, 220 ms for toggles and page transitions, 300 ms for theme colour changes, on `--ease-out` (cubic-bezier(0.16, 1, 0.3, 1)). App screens stay at or under 300 ms apart from the arrival summary's plotted rows and meter and the slow opacity pulse of loading skeletons.
 - **Reduced motion:** wipes, rules and bars appear in their final state, entrances and view transitions are removed, and remaining transitions collapse to 1 ms.
 

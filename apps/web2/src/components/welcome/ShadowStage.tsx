@@ -8,6 +8,7 @@ import { cycleFor, DAY_END_U, timeAt, uAt } from '../plan-view/dayCycle.ts';
 import { DemoCache, SIAM, slotFor, TRIPS, type DemoRoutes } from '../plan-view/demo.ts';
 import { PlanCanvas, type PlanCanvasHandle } from '../plan-view/PlanCanvas.tsx';
 import { frameCamera, nightFor, toPlanPoint, type Camera, type PreparedScene } from '../plan-view/planDraw.ts';
+import { installStageScroll } from './stageScroll.ts';
 
 // The first screen: the shadow plan held in place while the page scrolls.
 // Scrolling or dragging the time bar moves the clock through one day.
@@ -67,6 +68,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
   const stageEl = useRef<HTMLDivElement>(null);
   const handleEl = useRef<HTMLDivElement>(null);
   const canvas = useRef<PlanCanvasHandle>(null);
+  const stageScroll = useRef<ReturnType<typeof installStageScroll> | null>(null);
   const cycle = useMemo(() => cycleFor(new Date(), SIAM), []);
   const u0 = useMemo(() => uAt(cycle, new Date()), [cycle]);
   const clock = useMemo(
@@ -103,7 +105,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
       if (p === null) return;
       const u = u0 + p * 0.985;
       const slot = slotFor(u);
-      cache?.request(slot);
+      if (!stageScroll.current?.animating) cache?.request(slot);
       const routes = cache?.at(slot) ?? null;
       const { w, h } = canvas.current?.size() ?? { w: 0, h: 0 };
       if (last?.p === p && last.w === w && last.h === h && last.routes === routes) return;
@@ -168,6 +170,16 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
     };
   }, [prepared, tripInfo, lang, cycle, u0, clock, noon]);
 
+  useEffect(() => {
+    if (!prepared || !sceneEl.current) return;
+    const scroll = installStageScroll(sceneEl.current, () => wake.current());
+    stageScroll.current = scroll;
+    return () => {
+      scroll.dispose();
+      stageScroll.current = null;
+    };
+  }, [prepared]);
+
   // ---------- The time bar: the same control as scrolling ----------
   const scrollToU = (u: number, smooth = false) => {
     const el = sceneEl.current;
@@ -181,6 +193,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
     return clamp01((e.clientX - r.left) / r.width);
   };
   const onBarDown = (e: PointerEvent<HTMLDivElement>) => {
+    stageScroll.current?.stop();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragging(true);
     scrollToU(uFromPointer(e));
@@ -192,6 +205,7 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
     const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
     if (!step) return;
     e.preventDefault();
+    stageScroll.current?.stop();
     const el = sceneEl.current;
     if (el) window.scrollBy({ top: (step * (el.offsetHeight - window.innerHeight)) / 34 });
   };
@@ -323,8 +337,10 @@ export function ShadowStage({ prepared, failed, trip, onTrip, onStart, onNight }
                 type="button"
                 className="btn btn--ghost"
                 onClick={() => {
+                  if (stageScroll.current?.advance(1)) return;
                   const el = sceneEl.current;
-                  if (el) window.scrollBy({ top: (el.offsetHeight - window.innerHeight) * 0.3, behavior: 'smooth' });
+                  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                  if (el) window.scrollBy({ top: (el.offsetHeight - window.innerHeight) * 0.25, behavior: reduced ? 'instant' : 'smooth' });
                 }}
                 data-testid="landing-how"
               >
