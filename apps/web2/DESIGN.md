@@ -220,7 +220,7 @@ A navy-and-sky drafting palette with two signal colours that each mean exactly o
 - **Tinted Paper** (`surface-2-day`, #e2eefc): day hover and pressed fills, skeleton rows, notices.
 - **Plan Ground** (`plan-ground-day`, #e6f0fd; `plan-ground-night`, #0d2442): the ground of the plan drawing and the map, a step off the page background so footprints sit on it.
 - **Navy Ink** (`navy-900`, #0b1f3a): day text, headings, rules and shadow tint; night background.
-- **Night Surface** (`navy-800`, #10294b) and **Night Raised** (`navy-700`, #17355e): night panels and their hover fill; `navy-700` is also the logo tile at night. Night footprints use `plan-building-night` (#12305a).
+- **Night Surface** (`navy-800`, #10294b) and **Night Raised** (`navy-700`, #17355e): night panels and their hover fill. Night footprints use `plan-building-night` (#12305a). Both themes use the same Walk We mark from `public/icon.svg`.
 - **Deepest Navy** (`navy-950`, #071528): text on Night Sky Blue, the night half of the time ruler, the route casing on the night map.
 - **Dim Ink** (`text-dim-day`, #3a4f72; `text-dim-night`, #a9c1e4): secondary text, column heads, axis ticks.
 - **Hairline** (`hairline-day`, `hairline-night`): the translucent ink of 1 px dividers and quiet borders. Frame rules and strong borders use full ink instead.
@@ -306,7 +306,7 @@ Solid, square and tall; a button is a labelled cell, not a pill.
 - **Icon button:** 48 px square, hairline border, surface ground; a bare variant drops border and ground for back and close.
 
 ### Segmented control
-One ink frame with square cells divided by ink hairlines; the pressed cell is the primary ground. Used for time, mode and theme, and as the TH / EN switch on the welcome strip (pressed cell in ink on paper).
+One ink frame with square cells divided by ink hairlines; the pressed cell is the primary ground. Used for time, mode and theme.
 
 ### Chips
 - **Style:** a label lettered on the drawing: surface ground, 1 px ink border, 2 px corners, 40 px tall, Label type with a 16 to 18 px line icon. Used for the mode, offline state and distance to the step.
@@ -327,7 +327,7 @@ One ink frame with square cells divided by ink hairlines; the pressed cell is th
 - **Switch:** a 48 by 28 px square frame with a 20 px square block that slides right and turns the frame primary when on.
 
 ### Navigation
-The welcome page has a fixed 64 px top strip on the page ground with a hairline beneath: mark and wordmark, section links from 960 px (dim, 600 weight, a 2 px rule drawing in from the left on hover and focus), the TH / EN switch and a compact primary Start. The strip takes the night sheet while the stage beneath it is in night. App pages have no global navigation: a title row with a bare back button, the title and the language toggle, closed by a frame rule. Page changes slide 16 px along the reading line with a cross-fade (220 ms), forward to the left and back to the right.
+The welcome page has a fixed 64 px top strip on the page ground with a hairline beneath: mark and wordmark, section links from 960 px (dim, 600 weight, a 2 px rule drawing in from the left on hover and focus), the circular language toggle and a compact primary Start. The strip takes the night sheet while the stage beneath it is in night. The language toggle uses the theme’s accent for the translation icon and the raised surface for its circle. App pages have no global navigation: a title row with a bare back button, the title and the language toggle, closed by a frame rule. Page changes slide 16 px along the reading line with a cross-fade (220 ms), forward to the left and back to the right.
 
 ### Legend keys
 Small swatches that say what a line on the drawing means, used in legends, readouts and captions: a solid 18 by 5 px bar for the shaded or safer stretch, an amber bar for the sunlit stretch, a 3 px dashed pale line for the night lower-scoring stretch, a 2 px dashed ink line for the shortest route, a 2 px ink tick, a 7 px square for a camera. Every drawing that uses a line style shows its key.
@@ -343,7 +343,7 @@ A 56 px square in SOS Ground with a 2 px white border and floating shadow, fixed
 
 ### Motion
 - **Plotted in:** content wipes in with `clip-path` along the reading direction (500 to 800 ms welcome, 600 ms summary rows), staggered 60 to 120 ms per row. Rules and meters draw with `scaleX` from the left (300 ms in the app, 900 ms on the welcome page); chart bars rise with `scaleY` from the axis (600 ms). Easing is `--ease-plot` (cubic-bezier(0.65, 0, 0.2, 1)).
-- **Scroll-driven drawing:** on the welcome page the scroll (or a drag on the time ruler) is the clock. Shadows, routes and the day-to-night blend are redrawn per animation frame and eased toward the target rather than jumping.
+- **Scroll-driven drawing:** the Welcome plan starts at the current time. A scroll gesture moves one stage of the shadow study and finishes before the next gesture advances it. Dragging the time ruler updates the drawing directly. The drawing stops when the view is unchanged or offscreen.
 - **State changes:** 120 ms for press and hover, 220 ms for toggles and page transitions, 300 ms for theme colour changes, on `--ease-out` (cubic-bezier(0.16, 1, 0.3, 1)). App screens stay at or under 300 ms apart from the arrival summary's plotted rows and meter and the slow opacity pulse of loading skeletons.
 - **Reduced motion:** wipes, rules and bars appear in their final state, entrances and view transitions are removed, and remaining transitions collapse to 1 ms.
 

@@ -100,7 +100,7 @@ around the route. The walk in progress is persisted, so an offline reload resume
 Lighthouse mobile (`npm run lighthouse`, simulated slow 4G + 4× CPU): every screen ≥ 90
 (92–93 at the time of writing). Rules that keep it there:
 
-- Landing and the planner ship in the main bundle; other screens are lazy chunks.
+- Landing ships in the main bundle. The planner and other screens load on demand.
 - MapLibre (~280 KB gzip) loads only after the first paint and the fonts; the day basemap is
   OpenFreeMap **positron** (55 layers) — liberty (111 layers + 3D buildings) cost ~2 s of main
   thread on a mid-range phone.

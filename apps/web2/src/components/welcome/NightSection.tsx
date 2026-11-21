@@ -3,7 +3,7 @@ import { copy, type CopyKey } from '../../landingCopy.ts';
 import type { DatasetMeta } from '../../routing/protocol.ts';
 import { routing } from '../../services.ts';
 import { useI18n } from '../../store/i18n.tsx';
-import { useViewProgress } from '../../utils/useViewProgress.ts';
+import { useSeen, useViewProgress } from '../../utils/useViewProgress.ts';
 import { TRIPS } from '../plan-view/demo.ts';
 import { PlanCanvas, type PlanCanvasHandle } from '../plan-view/PlanCanvas.tsx';
 import { frameCamera, toPlanPoint, toPlanRoute, type PlanRoute, type PreparedScene } from '../plan-view/planDraw.ts';
@@ -18,14 +18,14 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 export function NightSection({ prepared, meta, trip }: { prepared: PreparedScene | null; meta: DatasetMeta | null; trip: number }) {
   const { lang } = useI18n();
   const c = (k: CopyKey, v?: Record<string, string | number>) => copy(lang, k, v);
-  const ref = useRef<HTMLElement>(null);
+  const [ref, seen] = useSeen<HTMLElement>();
   const canvas = useRef<PlanCanvasHandle>(null);
   const p = useViewProgress(ref);
   const [routes, setRoutes] = useState<{ main: PlanRoute; alt: PlanRoute | null } | null>(null);
   const info = TRIPS[trip]!;
 
   useEffect(() => {
-    if (!prepared) return;
+    if (!seen || !prepared) return;
     let live = true;
     setRoutes(null);
     // 21:00 today, Bangkok.
@@ -46,11 +46,11 @@ export function NightSection({ prepared, meta, trip }: { prepared: PreparedScene
     return () => {
       live = false;
     };
-  }, [prepared, trip]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seen, prepared, trip]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const draw = () => {
     const h = canvas.current;
-    if (!h || !prepared) return;
+    if (!seen || !h || !prepared) return;
     const { w, h: hh } = h.size();
     if (!w) return;
     const a = toPlanPoint(info.from, prepared.scene);

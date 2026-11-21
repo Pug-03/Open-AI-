@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { BestTime } from '../components/BestTime.tsx';
+import { LangToggle } from '../components/LangToggle.tsx';
 import { LogoMark } from '../components/Logo.tsx';
 import { PLAN_BBOX, TRIPS } from '../components/plan-view/demo.ts';
 import { prepareScene, type PreparedScene } from '../components/plan-view/planDraw.ts';
@@ -33,7 +34,7 @@ const NAV: Array<[string, CopyKey]> = [
 ];
 
 export default function Landing() {
-  const { lang, setLang } = useI18n();
+  const { lang } = useI18n();
   const c = (k: CopyKey, v?: Record<string, string | number>) => copy(lang, k, v);
   const go = useGo();
   const [prepared, setPrepared] = useState<PreparedScene | null>(null);
@@ -54,13 +55,16 @@ export default function Landing() {
   // worker (the same data the planner routes on), after the first paint.
   useEffect(() => {
     let live = true;
-    const id = window.setTimeout(() => {
+    const load = () => {
       routing.scene(PLAN_BBOX).then((s) => live && setPrepared(prepareScene(s)), () => live && setFailed(true));
       routing.warm().then((m) => live && setMeta(m), () => {});
-    }, 60);
+    };
+    const idle = typeof window.requestIdleCallback === 'function';
+    const id = idle ? window.requestIdleCallback(load, { timeout: 800 }) : window.setTimeout(load, 120);
     return () => {
       live = false;
-      window.clearTimeout(id);
+      if (idle) window.cancelIdleCallback(id);
+      else window.clearTimeout(id);
     };
   }, []);
 
@@ -90,17 +94,7 @@ export default function Landing() {
             </a>
           ))}
         </nav>
-        <button
-          type="button"
-          className="lp-lang"
-          onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
-          aria-label={lang === 'th' ? 'Switch to English' : 'เปลี่ยนเป็นภาษาไทย'}
-          lang={lang === 'th' ? 'en' : 'th'}
-          data-testid="lang-toggle"
-        >
-          <span aria-current={lang === 'th' ? 'true' : undefined}>TH</span>
-          <span aria-current={lang === 'en' ? 'true' : undefined}>EN</span>
-        </button>
+        <LangToggle className="lp-lang" />
         <button type="button" className="btn btn--primary lp-nav-start" onClick={start} data-testid="nav-start">
           {c('nav.start')}
           <ArrowRight size={18} aria-hidden="true" className="btn-arrow" />
@@ -175,7 +169,7 @@ export default function Landing() {
           </div>
           <div>
             <dt>{c('foot.by')}</dt>
-            <dd>หมูกรอบกับหมาไส้กรอกตะลุยอวกาศ</dd>
+            <dd>Dev</dd>
           </div>
           <div>
             <dt>© 2569 Walk We</dt>

@@ -80,30 +80,6 @@
 }
 .lp-lang {
   margin-inline-start: auto;
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap);
-  padding: 0;
-  border: var(--hair) solid var(--border);
-  border-radius: var(--radius);
-  background: transparent;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  overflow: hidden;
-}
-.lp-lang span {
-  display: grid;
-  place-items: center;
-  min-width: 44px;
-  height: 46px;
-  color: var(--text-dim);
-  transition:
-    background var(--dur) ease,
-    color var(--dur) ease;
-}
-.lp-lang span[aria-current] {
-  background: var(--ink);
-  color: var(--paper);
 }
 .lp-nav .lp-nav-start {
   width: auto;
@@ -143,7 +119,6 @@
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 700ms ease;
 }
 .stage.is-ready .stage-canvas {
   opacity: 1;
@@ -156,7 +131,6 @@
     linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% 48px,
     linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0 / 48px 100%;
   opacity: 0.5;
-  transition: opacity 700ms ease;
   pointer-events: none;
 }
 .stage.is-ready .stage-grid {
@@ -308,7 +282,6 @@
   border-top: var(--frame) solid var(--rule);
   opacity: var(--hero);
   transform: translateY(calc((1 - var(--hero)) * 28px));
-  clip-path: inset(calc((1 - var(--hero)) * 60%) 0 0 0);
   transition:
     background-color var(--dur-slow) ease,
     visibility 0s linear 0s;
@@ -386,25 +359,6 @@
   font-size: 0.8125rem;
   color: var(--text-dim);
 }
-/* Entrance: the block is plotted row by row. */
-.titleblock .tb-row {
-  animation: tb-plot 700ms var(--ease-plot) both;
-}
-.titleblock .tb-main {
-  animation-delay: 120ms;
-}
-.titleblock .tb-cells {
-  animation-delay: 240ms;
-}
-@keyframes tb-plot {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
 /* Caption: the clock and what the shadows are doing now. */
 .caption {
   grid-row: 5;
@@ -439,17 +393,7 @@
   font-size: 1.0625rem;
   line-height: 1.5;
   min-height: 3em;
-  animation: wipe-in 500ms var(--ease-plot) both;
 }
-@keyframes wipe-in {
-  from {
-    clip-path: inset(-0.4em 100% -0.4em -0.2em);
-  }
-  to {
-    clip-path: inset(-0.4em -0.2em);
-  }
-}
-
 .stage-scale {
   display: none;
 }
@@ -1291,10 +1235,6 @@ text.dg-text {
   .best-alt {
     opacity: 1;
   }
-  .titleblock .tb-row,
-  .caption-phase {
-    animation: none;
-  }
 }
 
 /* ---------- Review fixes ---------- */
@@ -1307,9 +1247,6 @@ text.dg-text {
   width: 54px;
   height: 54px;
   pointer-events: none;
-}
-.stage-sun g {
-  transition: transform 300ms linear;
 }
 .sun-disc {
   fill: var(--sun);
