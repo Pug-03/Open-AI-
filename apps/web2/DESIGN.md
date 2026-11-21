@@ -220,7 +220,7 @@ A navy-and-sky drafting palette with two signal colours that each mean exactly o
 - **Tinted Paper** (`surface-2-day`, #e2eefc): day hover and pressed fills, skeleton rows, notices.
 - **Plan Ground** (`plan-ground-day`, #e6f0fd; `plan-ground-night`, #0d2442): the ground of the plan drawing and the map, a step off the page background so footprints sit on it.
 - **Navy Ink** (`navy-900`, #0b1f3a): day text, headings, rules and shadow tint; night background.
-- **Night Surface** (`navy-800`, #10294b) and **Night Raised** (`navy-700`, #17355e): night panels and their hover fill; `navy-700` is also the logo tile at night. Night footprints use `plan-building-night` (#12305a).
+- **Night Surface** (`navy-800`, #10294b) and **Night Raised** (`navy-700`, #17355e): night panels and their hover fill. Night footprints use `plan-building-night` (#12305a). Both themes use the same Walk We mark from `public/icon.svg`.
 - **Deepest Navy** (`navy-950`, #071528): text on Night Sky Blue, the night half of the time ruler, the route casing on the night map.
 - **Dim Ink** (`text-dim-day`, #3a4f72; `text-dim-night`, #a9c1e4): secondary text, column heads, axis ticks.
 - **Hairline** (`hairline-day`, `hairline-night`): the translucent ink of 1 px dividers and quiet borders. Frame rules and strong borders use full ink instead.
