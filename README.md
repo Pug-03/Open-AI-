@@ -101,6 +101,60 @@ More detail, including how to scale to the whole city and add another city, is i
 
 ## Agentic AI Workflow
 
+### Architecture at a glance
+
+```mermaid
+flowchart TD
+  subgraph PHONE["Layer 1: Phone (Web2 PWA)"]
+    UI["React UI"] --- ROUTER["On-device routing<br/>AreaRouter A* + SunCalc shade"]
+    UI --- VOICE["Live voice<br/>WebRTC, opt-in"]
+    UI --- STORE[("Device storage<br/>places, preferences, active trip")]
+  end
+
+  subgraph EDGE["Layer 2: Cloudflare proxy (apps/ai-proxy)"]
+    API["/agentic/intent, /agentic/plan, /agentic/companion<br/>/voice/live, /voice/live/speak<br/>origin checks, rate limits, Worker secrets"]
+  end
+
+  subgraph ORCH["Layer 3: Orchestrator in code (createWorkflows)"]
+    IN["Intent"] --> CONFIRM["Walker confirms places"] --> SNAP["Routing snapshot<br/>one dataset version"]
+    SNAP --> PL["Planner"]
+    PL <--> TOOLS["Tool registry<br/>function calling, one call at a time"]
+    PL --> VER{"Verifier V1-V8"}
+    VER -- "winner flips or close call" --> CR["Critic"]
+    CR -. "reject with feedback" .-> PL
+    VER -- "pass" --> OUT["Code fills checked numbers"]
+    CR -- "accept" --> OUT
+    VER -. "fails, times out or over budget" .-> FB["Deterministic routing result"]
+  end
+
+  subgraph AI["Layer 4: OpenAI"]
+    RESP["Responses API<br/>GPT-6.1 Terra: Intent, Planner<br/>GPT-6.1 Sol: Critic"]
+    LIVE["gpt-live-1.1 delegates to Terra<br/>gpt-realtime-2.1-mini checked speech"]
+    AGENTS["Agents API<br/>GPT-6 Astra + web search"]
+  end
+
+  subgraph DATA["Layer 5: Data and evidence loop"]
+    DS[("Versioned Siam graph<br/>OSM, BMA CCTV, Open-Meteo")]
+    QUEUE[("EVIDENCE_QUEUE<br/>Steward, News Scout, Research drafts")] --> HUMAN["Human review and audit"] --> DS
+    MCP["Read-only MCP, 3 tools<br/>Codex and Claude inspection"]
+  end
+
+  UI --> API --> IN
+  IN --> RESP
+  PL --> RESP
+  CR --> RESP
+  VOICE --> LIVE
+  TOOLS --> DS
+  MCP --> DS
+  AGENTS --> QUEUE
+```
+
+1. **Phone.** Map routes run on-device in a Web Worker, so private pins and GPS stay on the phone. Saved places, preferences and the active trip live in device storage.
+2. **Cloudflare proxy.** Every model call and every voice session starts here, so the OpenAI key stays in a Worker secret and never reaches the browser. It checks the origin, applies rate limits and streams NDJSON progress.
+3. **Orchestrator in code.** No model decides the order of steps. The harness validates every tool call against the trip snapshot, the verifier checks the draft, and code fills every number. Critic runs only when the lighting assumption changes the winner or another route is within two minutes. Any failure returns the deterministic routing result.
+4. **OpenAI.** Tools are called through Responses API function calling with strict schemas. Live voice, checked speech and Segment Research use their own OpenAI endpoints.
+5. **Data and evidence loop.** Tools read our own routing engine and versioned dataset. Steward, News Scout and Research only create drafts. A human approves them before any lighting reaches the graph. The read-only MCP server exposes the same evidence for inspection.
+
 ### Plan and verify a walk
 
 1. **Capture and confirm intent.** A typed or spoken Thai or English request becomes an editable draft with start, destination, Bangkok departure time, day or night mode, and stair preference. Optional GPT‑6.1 Terra extraction is scoped to the public place catalogue. The local parser and form handle unavailable models and fields that need clarification. The walker confirms the endpoints before calculating routes.
